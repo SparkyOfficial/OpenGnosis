@@ -19,14 +19,62 @@ spec:
   selector:
     app: elasticsearch
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-headless
+  namespace: opengnosis
+  labels:
+    app: elasticsearch
+spec:
+  clusterIP: None
+  ports:
+    - port: 9200
+      name: http
+    - port: 9300
+      name: transport
+  selector:
+    app: elasticsearch
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticsearch-config
+  namespace: opengnosis
+data:
+  elasticsearch.yml: |
+    cluster.name: opengnosis-cluster
+    network.host: 0.0.0.0
+    
+    # Discovery settings
+    discovery.seed_hosts:
+      - elasticsearch-0.elasticsearch-headless.opengnosis.svc.cluster.local
+      - elasticsearch-1.elasticsearch-headless.opengnosis.svc.cluster.local
+      - elasticsearch-2.elasticsearch-headless.opengnosis.svc.cluster.local
+    cluster.initial_master_nodes:
+      - elasticsearch-0
+      - elasticsearch-1
+      - elasticsearch-2
+    
+    # Security
+    xpack.security.enabled: false
+    xpack.security.transport.ssl.enabled: false
+    
+    # Performance
+    indices.memory.index_buffer_size: 30%
+    indices.queries.cache.size: 10%
+    
+    # Monitoring
+    xpack.monitoring.collection.enabled: true
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: elasticsearch
   namespace: opengnosis
 spec:
-  serviceName: elasticsearch-service
-  replicas: 1
+  serviceName: elasticsearch-headless
+  replicas: 3
   selector:
     matchLabels:
       app: elasticsearch
@@ -35,6 +83,23 @@ spec:
       labels:
         app: elasticsearch
     spec:
+      initContainers:
+      - name: increase-vm-max-map
+        image: busybox
+        command:
+        - sysctl
+        - -w
+        - vm.max_map_count=262144
+        securityContext:
+          privileged: true
+      - name: increase-fd-ulimit
+        image: busybox
+        command:
+        - sh
+        - -c
+        - ulimit -n 65536
+        securityContext:
+          privileged: true
       containers:
       - name: elasticsearch
         image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
@@ -44,12 +109,22 @@ spec:
         - containerPort: 9300
           name: transport
         env:
-        - name: discovery.type
-          value: "single-node"
+        - name: node.name
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: cluster.name
+          value: "opengnosis-cluster"
+        - name: discovery.seed_hosts
+          value: "elasticsearch-headless"
+        - name: cluster.initial_master_nodes
+          value: "elasticsearch-0,elasticsearch-1,elasticsearch-2"
+        - name: ES_JAVA_OPTS
+          value: "-Xms2g -Xmx2g"
         - name: xpack.security.enabled
           value: "false"
-        - name: ES_JAVA_OPTS
-          value: "-Xms1g -Xmx1g"
+        - name: xpack.security.transport.ssl.enabled
+          value: "false"
         resources:
           requests:
             memory: "2Gi"
@@ -60,6 +135,25 @@ spec:
         volumeMounts:
         - name: elasticsearch-storage
           mountPath: /usr/share/elasticsearch/data
+        - name: elasticsearch-config
+          mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
+          subPath: elasticsearch.yml
+        livenessProbe:
+          httpGet:
+            path: /_cluster/health
+            port: 9200
+          initialDelaySeconds: 90
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /_cluster/health?wait_for_status=yellow&timeout=5s
+            port: 9200
+          initialDelaySeconds: 60
+          periodSeconds: 10
+      volumes:
+      - name: elasticsearch-config
+        configMap:
+          name: elasticsearch-config
   volumeClaimTemplates:
   - metadata:
       name: elasticsearch-storage
@@ -68,3 +162,154 @@ spec:
       resources:
         requests:
           storage: 30Gi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: elasticsearch-index-templates
+  namespace: opengnosis
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: create-templates
+        image: curlimages/curl:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Wait for Elasticsearch to be ready
+          echo "Waiting for Elasticsearch to be ready..."
+          until curl -s http://elasticsearch-service:9200/_cluster/health | grep -q '"status":"green\|yellow"'; do
+            echo "Elasticsearch is unavailable - sleeping"
+            sleep 5
+          done
+          
+          echo "Elasticsearch is ready - creating index templates"
+          
+          # Student grades read model index template
+          curl -X PUT "http://elasticsearch-service:9200/_index_template/student-grades-template" \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "index_patterns": ["student-grades-*"],
+              "template": {
+                "settings": {
+                  "number_of_shards": 3,
+                  "number_of_replicas": 1,
+                  "refresh_interval": "5s"
+                },
+                "mappings": {
+                  "properties": {
+                    "studentId": { "type": "keyword" },
+                    "subjectId": { "type": "keyword" },
+                    "classId": { "type": "keyword" },
+                    "gradeValue": { "type": "integer" },
+                    "gradeType": { "type": "keyword" },
+                    "average": { "type": "float" },
+                    "timestamp": { "type": "date" },
+                    "academicYearId": { "type": "keyword" },
+                    "termId": { "type": "keyword" }
+                  }
+                }
+              }
+            }'
+          
+          # Student attendance read model index template
+          curl -X PUT "http://elasticsearch-service:9200/_index_template/student-attendance-template" \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "index_patterns": ["student-attendance-*"],
+              "template": {
+                "settings": {
+                  "number_of_shards": 3,
+                  "number_of_replicas": 1,
+                  "refresh_interval": "5s"
+                },
+                "mappings": {
+                  "properties": {
+                    "studentId": { "type": "keyword" },
+                    "classId": { "type": "keyword" },
+                    "date": { "type": "date" },
+                    "status": { "type": "keyword" },
+                    "lessonNumber": { "type": "integer" },
+                    "totalLessons": { "type": "integer" },
+                    "presentCount": { "type": "integer" },
+                    "absentCount": { "type": "integer" },
+                    "lateCount": { "type": "integer" },
+                    "attendanceRate": { "type": "float" }
+                  }
+                }
+              }
+            }'
+          
+          # Class performance read model index template
+          curl -X PUT "http://elasticsearch-service:9200/_index_template/class-performance-template" \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "index_patterns": ["class-performance-*"],
+              "template": {
+                "settings": {
+                  "number_of_shards": 2,
+                  "number_of_replicas": 1,
+                  "refresh_interval": "10s"
+                },
+                "mappings": {
+                  "properties": {
+                    "classId": { "type": "keyword" },
+                    "subjectId": { "type": "keyword" },
+                    "averageGrade": { "type": "float" },
+                    "studentCount": { "type": "integer" },
+                    "gradeDistribution": { "type": "object" },
+                    "timestamp": { "type": "date" }
+                  }
+                }
+              }
+            }'
+          
+          # Student search index template
+          curl -X PUT "http://elasticsearch-service:9200/_index_template/students-template" \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "index_patterns": ["students-*"],
+              "template": {
+                "settings": {
+                  "number_of_shards": 2,
+                  "number_of_replicas": 1,
+                  "analysis": {
+                    "analyzer": {
+                      "name_analyzer": {
+                        "type": "custom",
+                        "tokenizer": "standard",
+                        "filter": ["lowercase", "asciifolding"]
+                      }
+                    }
+                  }
+                },
+                "mappings": {
+                  "properties": {
+                    "studentId": { "type": "keyword" },
+                    "firstName": { 
+                      "type": "text",
+                      "analyzer": "name_analyzer",
+                      "fields": {
+                        "keyword": { "type": "keyword" }
+                      }
+                    },
+                    "lastName": { 
+                      "type": "text",
+                      "analyzer": "name_analyzer",
+                      "fields": {
+                        "keyword": { "type": "keyword" }
+                      }
+                    },
+                    "email": { "type": "keyword" },
+                    "classId": { "type": "keyword" },
+                    "enrollmentDate": { "type": "date" }
+                  }
+                }
+              }
+            }'
+          
+          echo "Index templates created successfully"
+          curl -s http://elasticsearch-service:9200/_cat/templates?v

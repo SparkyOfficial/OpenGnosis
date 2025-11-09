@@ -21,6 +21,9 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     
+    implementation("org.flywaydb:flyway-core:10.0.0")
+    implementation("org.flywaydb:flyway-database-postgresql:10.0.0")
+    
     runtimeOnly("org.postgresql:postgresql")
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     

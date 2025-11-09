@@ -12,7 +12,7 @@ class EventPublisher(
     private val logger = LoggerFactory.getLogger(EventPublisher::class.java)
 
     fun publish(event: DomainEvent) {
-        val topic = getTopicForEvent(event.eventType)
+        val topic = KafkaTopics.getTopicForEventType(event.eventType)
         logger.info("Publishing event ${event.eventType} with ID ${event.eventId} to topic $topic")
         
         kafkaTemplate.send(topic, event.aggregateId.toString(), event)
@@ -23,15 +23,5 @@ class EventPublisher(
                     logger.debug("Event ${event.eventId} published successfully to partition ${result?.recordMetadata?.partition()}")
                 }
             }
-    }
-
-    private fun getTopicForEvent(eventType: String): String {
-        return when {
-            eventType.contains("Grade") || eventType.contains("Attendance") || eventType.contains("Homework") -> "journal-events"
-            eventType.contains("User") -> "user-events"
-            eventType.contains("School") || eventType.contains("Class") || eventType.contains("Student") || eventType.contains("Teacher") -> "structure-events"
-            eventType.contains("Schedule") -> "schedule-events"
-            else -> "domain-events"
-        }
     }
 }

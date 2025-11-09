@@ -13,6 +13,24 @@ spec:
       protocol: TCP
   selector:
     app: postgres
+    role: primary
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-replica-service
+  namespace: opengnosis
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+  selector:
+    app: postgres
+    role: replica
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -21,7 +39,7 @@ metadata:
   namespace: opengnosis
 spec:
   serviceName: postgres-service
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: postgres
@@ -30,6 +48,21 @@ spec:
       labels:
         app: postgres
     spec:
+      initContainers:
+      - name: init-postgres
+        image: postgres:16-alpine
+        command:
+        - /bin/sh
+        - -c
+        - |
+          if [ ! -f /var/lib/postgresql/data/PG_VERSION ]; then
+            echo "Initializing PostgreSQL data directory"
+            mkdir -p /var/lib/postgresql/data
+            chown -R postgres:postgres /var/lib/postgresql/data
+          fi
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
       containers:
       - name: postgres
         image: postgres:16-alpine
@@ -38,10 +71,7 @@ spec:
           name: postgres
         env:
         - name: POSTGRES_DB
-          valueFrom:
-            configMapKeyRef:
-              name: opengnosis-config
-              key: POSTGRES_DB
+          value: "opengnosis"
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
@@ -52,9 +82,19 @@ spec:
             secretKeyRef:
               name: opengnosis-secrets
               key: POSTGRES_PASSWORD
+        - name: POSTGRES_INITDB_ARGS
+          value: "--encoding=UTF8 --locale=en_US.UTF-8"
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
         volumeMounts:
         - name: postgres-storage
           mountPath: /var/lib/postgresql/data
+        - name: postgres-config
+          mountPath: /etc/postgresql
         resources:
           requests:
             memory: "512Mi"
@@ -62,6 +102,26 @@ spec:
           limits:
             memory: "2Gi"
             cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: postgres-config
+        configMap:
+          name: postgres-config
   volumeClaimTemplates:
   - metadata:
       name: postgres-storage
@@ -70,3 +130,116 @@ spec:
       resources:
         requests:
           storage: 20Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: opengnosis
+data:
+  postgresql.conf: |
+    # Connection settings
+    max_connections = 200
+    shared_buffers = 256MB
+    effective_cache_size = 1GB
+    maintenance_work_mem = 64MB
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    default_statistics_target = 100
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    work_mem = 2621kB
+    min_wal_size = 1GB
+    max_wal_size = 4GB
+    
+    # Replication settings
+    wal_level = replica
+    max_wal_senders = 10
+    max_replication_slots = 10
+    hot_standby = on
+    
+    # Logging
+    log_destination = 'stderr'
+    logging_collector = on
+    log_directory = 'log'
+    log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+    log_statement = 'mod'
+    log_duration = on
+    log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-init-schemas
+  namespace: opengnosis
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: postgres-init
+        image: postgres:16-alpine
+        env:
+        - name: PGHOST
+          value: "postgres-service"
+        - name: PGPORT
+          value: "5432"
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: opengnosis-secrets
+              key: POSTGRES_USER
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: opengnosis-secrets
+              key: POSTGRES_PASSWORD
+        - name: PGDATABASE
+          value: "opengnosis"
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Wait for PostgreSQL to be ready
+          echo "Waiting for PostgreSQL to be ready..."
+          until pg_isready -h $PGHOST -p $PGPORT -U $PGUSER; do
+            echo "PostgreSQL is unavailable - sleeping"
+            sleep 2
+          done
+          
+          echo "PostgreSQL is ready - creating schemas"
+          
+          # Create schemas for each service
+          psql -v ON_ERROR_STOP=1 <<-EOSQL
+            -- IAM Service Schema
+            CREATE SCHEMA IF NOT EXISTS iam;
+            GRANT ALL ON SCHEMA iam TO $PGUSER;
+            
+            -- Structure Service Schema
+            CREATE SCHEMA IF NOT EXISTS structure;
+            GRANT ALL ON SCHEMA structure TO $PGUSER;
+            
+            -- Scheduler Service Schema
+            CREATE SCHEMA IF NOT EXISTS scheduler;
+            GRANT ALL ON SCHEMA scheduler TO $PGUSER;
+            
+            -- Journal Command Service Schema
+            CREATE SCHEMA IF NOT EXISTS journal;
+            GRANT ALL ON SCHEMA journal TO $PGUSER;
+            
+            -- Analytics Query Service Schema
+            CREATE SCHEMA IF NOT EXISTS analytics;
+            GRANT ALL ON SCHEMA analytics TO $PGUSER;
+            
+            -- Notifier Service Schema
+            CREATE SCHEMA IF NOT EXISTS notifier;
+            GRANT ALL ON SCHEMA notifier TO $PGUSER;
+            
+            -- Create extensions
+            CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+            CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+            
+            SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('pg_catalog', 'information_schema');
+          EOSQL
+          
+          echo "Database schemas created successfully"

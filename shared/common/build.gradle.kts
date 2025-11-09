@@ -12,6 +12,15 @@ dependencies {
     // Spring Boot
     implementation("org.springframework.boot:spring-boot-starter:3.2.0")
     implementation("org.springframework.boot:spring-boot-starter-web:3.2.0")
+    implementation("org.springframework.boot:spring-boot-starter-data-redis:3.2.0")
+    implementation("org.springframework.boot:spring-boot-starter-cache:3.2.0")
+    
+    // Redis
+    implementation("io.lettuce:lettuce-core:6.3.0.RELEASE")
+    
+    // Elasticsearch
+    implementation("co.elastic.clients:elasticsearch-java:8.11.0")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.16.0")
     
     // Kafka
     implementation("org.springframework.kafka:spring-kafka:3.1.0")
