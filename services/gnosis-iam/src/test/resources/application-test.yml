@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: gnosis-iam-test
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        default_schema: iam
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+  flyway:
+    enabled: false
+
+jwt:
+  secret: test-secret-key-for-testing-minimum-256-bits-required
+  expiration: 3600000  # 1 hour
+  refresh-expiration: 7200000  # 2 hours
+
+logging:
+  level:
+    com.opengnosis: DEBUG
+    org.springframework.security: DEBUG

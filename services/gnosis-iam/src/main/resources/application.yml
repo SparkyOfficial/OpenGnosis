@@ -30,9 +30,17 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       group-id: ${spring.application.name}
+  redis:
+    host: ${REDIS_HOST:redis-service}
+    port: ${REDIS_PORT:6379}
 
 server:
   port: 8080
+
+jwt:
+  secret: ${JWT_SECRET:opengnosis-secret-key-change-in-production-minimum-256-bits}
+  expiration: 86400000  # 24 hours in milliseconds
+  refresh-expiration: 604800000  # 7 days in milliseconds
 
 management:
   endpoints:
