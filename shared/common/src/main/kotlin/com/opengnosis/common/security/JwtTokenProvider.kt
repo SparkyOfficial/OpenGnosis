@@ -23,8 +23,12 @@ class JwtTokenProvider {
     }
 
     fun generateToken(userId: String, email: String, roles: Set<String>): String {
+        return generateToken(userId, email, roles, jwtExpiration)
+    }
+
+    fun generateToken(userId: String, email: String, roles: Set<String>, expirationMillis: Long): String {
         val now = Date()
-        val expiryDate = Date(now.time + jwtExpiration)
+        val expiryDate = Date(now.time + expirationMillis)
 
         return Jwts.builder()
             .setSubject(userId)

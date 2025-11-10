@@ -1,4 +1,11 @@
 -- Structure Service Initial Schema
+
+-- Create schema if not exists
+CREATE SCHEMA IF NOT EXISTS structure;
+
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 -- Schools table
 CREATE TABLE structure.schools (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

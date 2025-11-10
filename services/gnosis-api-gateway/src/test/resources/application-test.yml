@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: gnosis-api-gateway-test
+  cloud:
+    gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            exposedHeaders:
+              - X-RateLimit-Remaining
+              - X-RateLimit-Limit
+              - X-RateLimit-Reset
+            maxAge: 3600
+      routes:
+        - id: iam-service
+          uri: ${MOCK_SERVER_URL:http://localhost:1080}
+          predicates:
+            - Path=/api/v1/auth/**,/api/v1/users/**
+        - id: structure-service
+          uri: ${MOCK_SERVER_URL:http://localhost:1080}
+          predicates:
+            - Path=/api/v1/schools/**,/api/v1/classes/**,/api/v1/subjects/**
+        - id: scheduler-service
+          uri: ${MOCK_SERVER_URL:http://localhost:1080}
+          predicates:
+            - Path=/api/v1/schedules/**
+        - id: journal-command-service
+          uri: ${MOCK_SERVER_URL:http://localhost:1080}
+          predicates:
+            - Path=/api/v1/commands/**
+        - id: analytics-query-service
+          uri: ${MOCK_SERVER_URL:http://localhost:1080}
+          predicates:
+            - Path=/api/v1/students/**,/api/v1/teachers/**,/api/v1/analytics/**,/api/v1/search/**
+        - id: notifier-service
+          uri: ${MOCK_SERVER_URL:http://localhost:1080}
+          predicates:
+            - Path=/api/v1/notifications/**
+
+server:
+  port: 0
+
+jwt:
+  secret: test-secret-key-for-integration-tests-minimum-256-bits-required
+  expiration: 3600000
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO
+    com.opengnosis.gateway: DEBUG
