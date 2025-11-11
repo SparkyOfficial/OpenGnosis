@@ -1,38 +1,52 @@
 spring:
   application:
     name: gnosis-scheduler
+  
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:postgres-service}:${POSTGRES_PORT:5432}/${POSTGRES_DB:opengnosis}
-    username: ${POSTGRES_USER:postgres}
-    password: ${POSTGRES_PASSWORD:postgres}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:scheduler_db}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+  
   jpa:
     hibernate:
       ddl-auto: validate
+    show-sql: false
     properties:
       hibernate:
-        default_schema: scheduler
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
-    show-sql: false
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+  
   flyway:
     enabled: true
     baseline-on-migrate: true
-    schemas: scheduler
     locations: classpath:db/migration
-    validate-on-migrate: true
+  
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-service:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
     consumer:
+      group-id: scheduler-service
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      group-id: ${spring.application.name}
+      auto-offset-reset: earliest
+      properties:
+        spring.json.trusted.packages: "*"
 
 server:
-  port: 8082
+  port: ${SERVER_PORT:8083}
 
 management:
   endpoints:
@@ -43,3 +57,10 @@ management:
     export:
       prometheus:
         enabled: true
+
+optaplanner:
+  solver:
+    termination:
+      spent-limit: 30s
+  solver-manager:
+    parallel-solver-count: AUTO
