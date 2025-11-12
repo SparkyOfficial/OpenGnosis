@@ -35,7 +35,6 @@ class ScheduleService(
         val saved = scheduleRepository.save(schedule)
         
         eventPublisher.publish(
-            "schedule-events",
             ScheduleCreatedEvent(
                 aggregateId = saved.id,
                 academicYearId = saved.academicYearId,
@@ -94,7 +93,6 @@ class ScheduleService(
         val saved = scheduleEntryRepository.save(entry)
         
         eventPublisher.publish(
-            "schedule-events",
             ScheduleModifiedEvent(
                 aggregateId = scheduleId,
                 scheduleEntryId = saved.id,
@@ -229,7 +227,6 @@ class ScheduleService(
         val saved = scheduleEntryRepository.save(updated)
         
         eventPublisher.publish(
-            "schedule-events",
             ScheduleModifiedEvent(
                 aggregateId = scheduleId,
                 scheduleEntryId = saved.id,
@@ -260,7 +257,6 @@ class ScheduleService(
         scheduleEntryRepository.delete(entry)
         
         eventPublisher.publish(
-            "schedule-events",
             ScheduleModifiedEvent(
                 aggregateId = scheduleId,
                 scheduleEntryId = entryData.id,

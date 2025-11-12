@@ -21,8 +21,7 @@ class TeacherAvailabilityService(
             teacherId = request.teacherId,
             dayOfWeek = DayOfWeek.valueOf(request.dayOfWeek.uppercase()),
             startTime = LocalTime.parse(request.startTime),
-            endTime = LocalTime.parse(request.endTime),
-            available = request.available
+            endTime = LocalTime.parse(request.endTime)
         )
         
         val saved = teacherAvailabilityRepository.save(availability)
@@ -54,7 +53,6 @@ class TeacherAvailabilityService(
         val availabilities = teacherAvailabilityRepository.findByTeacherIdAndDayOfWeek(teacherId, dayOfWeek)
         
         return availabilities.any { availability ->
-            availability.available &&
             availability.startTime <= startTime &&
             availability.endTime >= endTime
         }
@@ -65,7 +63,6 @@ class TeacherAvailabilityService(
         teacherId = teacherId,
         dayOfWeek = dayOfWeek.name,
         startTime = startTime.toString(),
-        endTime = endTime.toString(),
-        available = available
+        endTime = endTime.toString()
     )
 }

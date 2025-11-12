@@ -19,8 +19,7 @@ class ClassroomService(
         val classroom = Classroom(
             schoolId = request.schoolId,
             name = request.name,
-            capacity = request.capacity,
-            equipment = request.equipment
+            capacity = request.capacity
         )
         
         val saved = classroomRepository.save(classroom)
@@ -47,8 +46,7 @@ class ClassroomService(
         
         val updated = classroom.copy(
             name = request.name ?: classroom.name,
-            capacity = request.capacity ?: classroom.capacity,
-            equipment = request.equipment ?: classroom.equipment
+            capacity = request.capacity ?: classroom.capacity
         )
         
         val saved = classroomRepository.save(updated)
@@ -67,7 +65,6 @@ class ClassroomService(
         id = id,
         schoolId = schoolId,
         name = name,
-        capacity = capacity,
-        equipment = equipment
+        capacity = capacity
     )
 }

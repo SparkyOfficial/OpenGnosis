@@ -8,7 +8,9 @@ import java.util.UUID
 @Entity
 @Table(
     name = "teacher_availability",
-    indexes = [Index(name = "idx_teacher_availability_teacher", columnList = "teacher_id")]
+    indexes = [
+        Index(name = "idx_teacher_availability_teacher", columnList = "teacher_id")
+    ]
 )
 data class TeacherAvailability(
     @Id
@@ -25,8 +27,5 @@ data class TeacherAvailability(
     val startTime: LocalTime,
     
     @Column(nullable = false)
-    val endTime: LocalTime,
-    
-    @Column(nullable = false)
-    val available: Boolean = true
+    val endTime: LocalTime
 )

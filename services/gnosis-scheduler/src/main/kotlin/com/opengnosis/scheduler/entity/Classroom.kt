@@ -16,22 +16,5 @@ data class Classroom(
     val name: String,
     
     @Column(nullable = false)
-    val capacity: Int,
-    
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "classroom_equipment", joinColumns = [JoinColumn(name = "classroom_id")])
-    @Enumerated(EnumType.STRING)
-    @Column(name = "equipment")
-    val equipment: Set<Equipment> = emptySet()
+    val capacity: Int
 )
-
-enum class Equipment {
-    PROJECTOR,
-    WHITEBOARD,
-    SMARTBOARD,
-    COMPUTERS,
-    LAB_EQUIPMENT,
-    SPORTS_EQUIPMENT,
-    MUSIC_INSTRUMENTS,
-    ART_SUPPLIES
-}
