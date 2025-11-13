@@ -33,4 +33,5 @@ dependencies {
     testImplementation("org.testcontainers:postgresql:1.19.3")
     testImplementation("org.testcontainers:kafka:1.19.3")
     testImplementation("org.testcontainers:elasticsearch:1.19.3")
+    testImplementation("org.testcontainers:junit-jupiter:1.19.3")
 }
