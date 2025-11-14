@@ -1,0 +1,123 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gnosis-notifier
+  labels:
+    app: gnosis-notifier
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8086
+      targetPort: 8086
+      protocol: TCP
+      name: http
+  selector:
+    app: gnosis-notifier
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gnosis-notifier
+  labels:
+    app: gnosis-notifier
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gnosis-notifier
+  template:
+    metadata:
+      labels:
+        app: gnosis-notifier
+    spec:
+      containers:
+        - name: gnosis-notifier
+          image: opengnosis/gnosis-notifier:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8086
+              name: http
+          env:
+            - name: SERVER_PORT
+              value: "8086"
+            - name: DATABASE_URL
+              value: "jdbc:postgresql://postgres:5432/gnosis_notifier"
+            - name: DATABASE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: username
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:9092"
+            - name: SMTP_HOST
+              value: "smtp.gmail.com"
+            - name: SMTP_PORT
+              value: "587"
+            - name: SMTP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: smtp-secret
+                  key: username
+                  optional: true
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: smtp-secret
+                  key: password
+                  optional: true
+            - name: EMAIL_FROM
+              value: "noreply@opengnosis.com"
+            - name: EMAIL_ENABLED
+              value: "true"
+            - name: PUSH_ENABLED
+              value: "false"
+            - name: FCM_SERVER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: fcm-secret
+                  key: server-key
+                  optional: true
+            - name: SMS_ENABLED
+              value: "false"
+            - name: TWILIO_ACCOUNT_SID
+              valueFrom:
+                secretKeyRef:
+                  name: twilio-secret
+                  key: account-sid
+                  optional: true
+            - name: TWILIO_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: twilio-secret
+                  key: auth-token
+                  optional: true
+            - name: TWILIO_FROM_NUMBER
+              valueFrom:
+                secretKeyRef:
+                  name: twilio-secret
+                  key: from-number
+                  optional: true
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8086
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8086
+            initialDelaySeconds: 30
+            periodSeconds: 5
