@@ -19,7 +19,7 @@ class ScheduleModifiedEventConsumer(
         containerFactory = "kafkaListenerContainerFactory"
     )
     fun consumeScheduleModifiedEvent(event: ScheduleModifiedEvent) {
-        logger.info("Received ScheduleModifiedEvent for class: ${event.classId}")
+        logger.info("Received ScheduleModifiedEvent for schedule: ${event.scheduleId}")
         
         try {
             // In a real system, we would fetch all affected users (students, teachers, parents)
@@ -28,29 +28,31 @@ class ScheduleModifiedEventConsumer(
             val content = """
                 Your class schedule has been modified.
                 
-                Day: ${event.dayOfWeek}
-                Time: ${event.startTime} - ${event.endTime}
-                Classroom: ${event.classroomId}
+                Change: ${event.changeDescription}
+                Affected Classes: ${event.affectedClasses.size}
+                Affected Teachers: ${event.affectedTeachers.size}
                 
                 Please check your updated schedule.
             """.trimIndent()
             
-            // Send to teacher
-            notificationDispatchService.sendNotification(
-                userId = event.teacherId,
-                type = NotificationType.SCHEDULE_CHANGE,
-                title = title,
-                content = content,
-                email = null, // Would be fetched from user service
-                phoneNumber = null
-            )
+            // Send to all affected teachers
+            event.affectedTeachers.forEach { teacherId ->
+                notificationDispatchService.sendNotification(
+                    userId = teacherId,
+                    type = NotificationType.SCHEDULE_CHANGE,
+                    title = title,
+                    content = content,
+                    email = null, // Would be fetched from user service
+                    phoneNumber = null
+                )
+            }
             
-            // TODO: Fetch students from class and send to each
-            logger.info("Would send schedule change notification to all students in class: ${event.classId}")
+            // TODO: Fetch students from affected classes and send to each
+            logger.info("Would send schedule change notification to all students in classes: ${event.affectedClasses}")
             
-            logger.info("Successfully processed ScheduleModifiedEvent for class: ${event.classId}")
+            logger.info("Successfully processed ScheduleModifiedEvent for schedule: ${event.scheduleId}")
         } catch (e: Exception) {
-            logger.error("Failed to process ScheduleModifiedEvent for class: ${event.classId}", e)
+            logger.error("Failed to process ScheduleModifiedEvent for schedule: ${event.scheduleId}", e)
         }
     }
 }

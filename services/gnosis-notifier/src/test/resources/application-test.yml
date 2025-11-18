@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: gnosis-notifier-test
+  
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+  
+  kafka:
+    consumer:
+      group-id: gnosis-notifier-test-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+notification:
+  email:
+    from: test@opengnosis.com
+    enabled: true
+  push:
+    enabled: false
+    fcm:
+      server-key: test-key
+  sms:
+    enabled: false
+    twilio:
+      account-sid: test-sid
+      auth-token: test-token
+      from-number: +1234567890
+  retry:
+    max-attempts: 3
+    backoff-multiplier: 2
+    initial-interval: 1000
+
+logging:
+  level:
+    com.opengnosis: DEBUG
+    org.springframework.kafka: WARN
+    org.testcontainers: WARN

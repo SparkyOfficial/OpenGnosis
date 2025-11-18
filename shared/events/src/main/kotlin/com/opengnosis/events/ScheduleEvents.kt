@@ -19,15 +19,11 @@ data class ScheduleCreatedEvent(
 
 data class ScheduleModifiedEvent(
     override val aggregateId: UUID,
-    val scheduleEntryId: UUID,
-    val classId: UUID,
-    val subjectId: UUID,
-    val teacherId: UUID,
-    val classroomId: UUID,
-    val dayOfWeek: DayOfWeek,
-    val startTime: LocalTime,
-    val endTime: LocalTime,
+    val scheduleId: UUID,
+    val affectedClasses: List<UUID>,
+    val affectedTeachers: List<UUID>,
     val modifiedBy: UUID,
+    val changeDescription: String,
     override val eventId: UUID = UUID.randomUUID(),
     override val timestamp: Instant = Instant.now(),
     override val version: Int = 1

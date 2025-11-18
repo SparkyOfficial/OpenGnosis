@@ -40,10 +40,10 @@ data class HomeworkAssignedEvent(
     override val aggregateId: UUID,
     val classId: UUID,
     val subjectId: UUID,
+    val teacherId: UUID,
     val title: String,
     val description: String,
     val dueDate: LocalDate,
-    val assignedBy: UUID,
     override val eventId: UUID = UUID.randomUUID(),
     override val timestamp: Instant = Instant.now(),
     override val version: Int = 1
