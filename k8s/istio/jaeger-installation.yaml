@@ -1,0 +1,174 @@
+# Jaeger installation for distributed tracing
+# This deploys Jaeger operator and Jaeger instance for the OpenGnosis platform
+
+# Create observability namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    name: observability
+---
+# Jaeger Operator installation using Helm
+# Run: helm repo add jaegertracing https://jaegertracing.github.io/helm-charts
+# Run: helm install jaeger-operator jaegertracing/jaeger-operator -n observability
+
+# Jaeger instance configuration
+apiVersion: jaegertracing.io/v1
+kind: Jaeger
+metadata:
+  name: jaeger
+  namespace: observability
+spec:
+  # Deployment strategy: production (with Elasticsearch backend)
+  strategy: production
+  
+  # Storage configuration
+  storage:
+    type: elasticsearch
+    options:
+      es:
+        server-urls: http://elasticsearch.opengnosis.svc.cluster.local:9200
+        index-prefix: jaeger
+        # Number of shards for Jaeger indices
+        num-shards: 5
+        # Number of replicas for Jaeger indices
+        num-replicas: 1
+    # Elasticsearch configuration
+    esIndexCleaner:
+      enabled: true
+      numberOfDays: 7  # Keep traces for 7 days
+      schedule: "55 23 * * *"  # Run cleanup daily at 23:55
+  
+  # Collector configuration
+  collector:
+    replicas: 2
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    # Expose collector service
+    service:
+      type: ClusterIP
+    # Sampling configuration
+    options:
+      collector:
+        zipkin:
+          host-port: ":9411"
+  
+  # Query service configuration (UI)
+  query:
+    replicas: 2
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    # Expose query UI
+    service:
+      type: LoadBalancer
+    options:
+      query:
+        base-path: /jaeger
+  
+  # Agent configuration (sidecar)
+  agent:
+    strategy: DaemonSet
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+  
+  # Ingester configuration (for Kafka-based architecture)
+  ingester:
+    enabled: false
+  
+  # UI configuration
+  ui:
+    options:
+      dependencies:
+        menuEnabled: true
+      tracking:
+        gaID: ""  # Google Analytics ID (optional)
+---
+# Service for Jaeger collector (Zipkin compatible endpoint)
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-collector
+  namespace: observability
+  labels:
+    app: jaeger
+    component: collector
+spec:
+  type: ClusterIP
+  ports:
+    - name: jaeger-collector-http
+      port: 14268
+      targetPort: 14268
+      protocol: TCP
+    - name: jaeger-collector-grpc
+      port: 14250
+      targetPort: 14250
+      protocol: TCP
+    - name: zipkin
+      port: 9411
+      targetPort: 9411
+      protocol: TCP
+  selector:
+    app: jaeger
+    component: collector
+---
+# Service for Jaeger query (UI)
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-query
+  namespace: observability
+  labels:
+    app: jaeger
+    component: query
+spec:
+  type: ClusterIP
+  ports:
+    - name: jaeger-query
+      port: 16686
+      targetPort: 16686
+      protocol: TCP
+  selector:
+    app: jaeger
+    component: query
+---
+# Ingress for Jaeger UI (optional)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jaeger-ui
+  namespace: observability
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+    - hosts:
+        - jaeger.opengnosis.io
+      secretName: jaeger-tls-cert
+  rules:
+    - host: jaeger.opengnosis.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jaeger-query
+                port:
+                  number: 16686

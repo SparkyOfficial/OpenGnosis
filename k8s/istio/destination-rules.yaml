@@ -1,0 +1,287 @@
+# DestinationRule configurations for all services
+# These rules define traffic policies including mTLS, load balancing, and connection pools
+
+# API Gateway destination rule
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: gnosis-api-gateway
+  namespace: opengnosis
+spec:
+  host: gnosis-api-gateway.opengnosis.svc.cluster.local
+  trafficPolicy:
+    # Enable mTLS for connections to this service
+    tls:
+      mode: ISTIO_MUTUAL
+    # Load balancing policy
+    loadBalancer:
+      simple: LEAST_REQUEST
+    # Connection pool settings
+    connectionPool:
+      tcp:
+        maxConnections: 1000
+        connectTimeout: 10s
+      http:
+        http1MaxPendingRequests: 1024
+        http2MaxRequests: 1024
+        maxRequestsPerConnection: 10
+        maxRetries: 3
+    # Outlier detection for circuit breaking
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+---
+# IAM Service destination rule with canary subsets
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: gnosis-iam
+  namespace: opengnosis
+spec:
+  host: gnosis-iam.opengnosis.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      tcp:
+        maxConnections: 500
+        connectTimeout: 5s
+      http:
+        http1MaxPendingRequests: 512
+        http2MaxRequests: 512
+        maxRequestsPerConnection: 5
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+  # Subsets for canary deployments
+  subsets:
+    - name: stable
+      labels:
+        version: stable
+    - name: canary
+      labels:
+        version: canary
+      trafficPolicy:
+        # Canary can have different circuit breaker settings
+        outlierDetection:
+          consecutiveErrors: 3
+          interval: 20s
+          baseEjectionTime: 20s
+---
+# Structure Service destination rule with canary subsets
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: gnosis-structure
+  namespace: opengnosis
+spec:
+  host: gnosis-structure.opengnosis.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      tcp:
+        maxConnections: 500
+        connectTimeout: 5s
+      http:
+        http1MaxPendingRequests: 512
+        http2MaxRequests: 512
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+  # Subsets for canary deployments
+  subsets:
+    - name: stable
+      labels:
+        version: stable
+    - name: canary
+      labels:
+        version: canary
+---
+# Scheduler Service destination rule
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: gnosis-scheduler
+  namespace: opengnosis
+spec:
+  host: gnosis-scheduler.opengnosis.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      tcp:
+        maxConnections: 500
+        connectTimeout: 5s
+      http:
+        http1MaxPendingRequests: 512
+        http2MaxRequests: 512
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+---
+# Journal Command Service destination rule
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: gnosis-journal-command
+  namespace: opengnosis
+spec:
+  host: gnosis-journal-command.opengnosis.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    loadBalancer:
+      simple: LEAST_REQUEST
+    connectionPool:
+      tcp:
+        maxConnections: 1000
+        connectTimeout: 5s
+      http:
+        http1MaxPendingRequests: 1024
+        http2MaxRequests: 1024
+        maxRequestsPerConnection: 10
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+---
+# Analytics Query Service destination rule
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: gnosis-analytics-query
+  namespace: opengnosis
+spec:
+  host: gnosis-analytics-query.opengnosis.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    loadBalancer:
+      simple: LEAST_REQUEST
+    connectionPool:
+      tcp:
+        maxConnections: 1000
+        connectTimeout: 5s
+      http:
+        http1MaxPendingRequests: 1024
+        http2MaxRequests: 1024
+        maxRequestsPerConnection: 10
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+---
+# Notifier Service destination rule
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: gnosis-notifier
+  namespace: opengnosis
+spec:
+  host: gnosis-notifier.opengnosis.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      tcp:
+        maxConnections: 500
+        connectTimeout: 5s
+      http:
+        http1MaxPendingRequests: 512
+        http2MaxRequests: 512
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+---
+# PostgreSQL destination rule (infrastructure)
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: postgresql
+  namespace: opengnosis
+spec:
+  host: postgresql.opengnosis.svc.cluster.local
+  trafficPolicy:
+    # Use plain text for PostgreSQL (no mTLS as it has its own authentication)
+    tls:
+      mode: DISABLE
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      tcp:
+        maxConnections: 100
+        connectTimeout: 10s
+---
+# Redis destination rule (infrastructure)
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: redis
+  namespace: opengnosis
+spec:
+  host: redis.opengnosis.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: DISABLE
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      tcp:
+        maxConnections: 200
+        connectTimeout: 5s
+---
+# Kafka destination rule (infrastructure)
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: kafka
+  namespace: opengnosis
+spec:
+  host: kafka.opengnosis.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: DISABLE
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      tcp:
+        maxConnections: 100
+        connectTimeout: 10s
+---
+# Elasticsearch destination rule (infrastructure)
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: elasticsearch
+  namespace: opengnosis
+spec:
+  host: elasticsearch.opengnosis.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: DISABLE
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      tcp:
+        maxConnections: 100
+        connectTimeout: 10s
+      http:
+        http1MaxPendingRequests: 256
+        http2MaxRequests: 256

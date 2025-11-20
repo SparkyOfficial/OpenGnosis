@@ -1,0 +1,129 @@
+# Istio tracing configuration to send traces to Jaeger
+# This configures Istio to collect and forward distributed traces
+
+# Telemetry configuration for tracing
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: tracing-default
+  namespace: istio-system
+spec:
+  # Apply to all workloads in the mesh
+  tracing:
+    - providers:
+        - name: jaeger
+      # Sample 100% of requests (reduce in production for performance)
+      randomSamplingPercentage: 100.0
+      # Custom tags to add to traces
+      customTags:
+        environment:
+          literal:
+            value: "production"
+        cluster:
+          literal:
+            value: "opengnosis-cluster"
+---
+# Tracing provider configuration
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: istio-tracing-config
+  namespace: istio-system
+spec:
+  meshConfig:
+    # Enable tracing
+    enableTracing: true
+    
+    # Default tracing configuration
+    defaultConfig:
+      tracing:
+        # Zipkin-compatible endpoint (Jaeger collector)
+        zipkin:
+          address: jaeger-collector.observability.svc.cluster.local:9411
+        # Sampling rate (100% for development, reduce in production)
+        sampling: 100.0
+        # Maximum length of the request path to include in the trace
+        max_path_tag_length: 256
+        # Custom tags
+        custom_tags:
+          http.url:
+            header:
+              name: ":path"
+          http.method:
+            header:
+              name: ":method"
+          http.status_code:
+            header:
+              name: ":status"
+          user_agent:
+            header:
+              name: "user-agent"
+          request_id:
+            header:
+              name: "x-request-id"
+    
+    # Extension providers for tracing
+    extensionProviders:
+      - name: jaeger
+        zipkin:
+          service: jaeger-collector.observability.svc.cluster.local
+          port: 9411
+          maxTagLength: 256
+---
+# Namespace-specific tracing configuration for production
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: tracing-production
+  namespace: opengnosis
+spec:
+  tracing:
+    - providers:
+        - name: jaeger
+      # Lower sampling rate for production (10%)
+      randomSamplingPercentage: 10.0
+      customTags:
+        environment:
+          literal:
+            value: "production"
+        namespace:
+          literal:
+            value: "opengnosis"
+---
+# Namespace-specific tracing configuration for development (100% sampling)
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: tracing-development
+  namespace: opengnosis-dev
+spec:
+  tracing:
+    - providers:
+        - name: jaeger
+      randomSamplingPercentage: 100.0
+      customTags:
+        environment:
+          literal:
+            value: "development"
+        namespace:
+          literal:
+            value: "opengnosis-dev"
+---
+# Namespace-specific tracing configuration for staging
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: tracing-staging
+  namespace: opengnosis-staging
+spec:
+  tracing:
+    - providers:
+        - name: jaeger
+      randomSamplingPercentage: 50.0
+      customTags:
+        environment:
+          literal:
+            value: "staging"
+        namespace:
+          literal:
+            value: "opengnosis-staging"

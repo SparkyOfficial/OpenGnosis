@@ -57,6 +57,12 @@ management:
     export:
       prometheus:
         enabled: true
+  tracing:
+    sampling:
+      probability: 1.0  # 100% sampling for development, reduce in production
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://jaeger-collector.observability.svc.cluster.local:9411/api/v2/spans}
 
 optaplanner:
   solver:
@@ -64,3 +70,7 @@ optaplanner:
       spent-limit: 30s
   solver-manager:
     parallel-solver-count: AUTO
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"

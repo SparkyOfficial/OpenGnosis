@@ -1,0 +1,76 @@
+# PeerAuthentication policies for mutual TLS (mTLS) configuration
+# These policies enforce STRICT mTLS mode for all service-to-service communication
+
+# Global mTLS policy for production namespace
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: opengnosis
+spec:
+  # STRICT mode: Only accept mTLS connections
+  # This ensures all service-to-service communication is encrypted and authenticated
+  mtls:
+    mode: STRICT
+---
+# Global mTLS policy for development namespace
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: opengnosis-dev
+spec:
+  mtls:
+    mode: STRICT
+---
+# Global mTLS policy for staging namespace
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: opengnosis-staging
+spec:
+  mtls:
+    mode: STRICT
+---
+# Mesh-wide mTLS policy (applies to all namespaces without specific policy)
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: STRICT
+---
+# Special policy for API Gateway to accept both mTLS and plain text from external clients
+# The gateway needs to accept plain HTTPS from external clients and use mTLS for backend
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: api-gateway-mtls
+  namespace: opengnosis
+spec:
+  selector:
+    matchLabels:
+      app: gnosis-api-gateway
+  mtls:
+    mode: STRICT
+  # Allow specific ports to accept plain text (if needed for health checks)
+  portLevelMtls:
+    8080:
+      mode: PERMISSIVE  # Health check endpoint
+---
+# Policy for infrastructure services (Kafka, PostgreSQL, Redis, Elasticsearch)
+# These may need PERMISSIVE mode if they don't have Istio sidecars
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: infrastructure-mtls
+  namespace: opengnosis
+spec:
+  selector:
+    matchLabels:
+      component: infrastructure
+  mtls:
+    mode: PERMISSIVE  # Allow both mTLS and plain text for infrastructure

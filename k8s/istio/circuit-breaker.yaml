@@ -1,0 +1,109 @@
+# Enhanced circuit breaker configurations for all services
+# These policies prevent cascading failures by detecting and isolating unhealthy instances
+
+# Circuit breaker for API Gateway
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: gnosis-api-gateway-circuit-breaker
+  namespace: opengnosis
+spec:
+  host: gnosis-api-gateway.opengnosis.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 1000
+      http:
+        http1MaxPendingRequests: 1024
+        http2MaxRequests: 1024
+        maxRequestsPerConnection: 10
+        maxRetries: 3
+    outlierDetection:
+      # Number of errors before a host is ejected
+      consecutiveErrors: 5
+      # Time interval for ejection analysis
+      interval: 30s
+      # Minimum ejection duration
+      baseEjectionTime: 30s
+      # Maximum percentage of hosts that can be ejected
+      maxEjectionPercent: 50
+      # Minimum percentage of hosts that must remain healthy
+      minHealthPercent: 50
+      # Split external and local origin errors
+      splitExternalLocalOriginErrors: true
+      # Consecutive local origin failures before ejection
+      consecutiveLocalOriginFailures: 5
+---
+# Circuit breaker for high-traffic services (Journal Command)
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: gnosis-journal-command-circuit-breaker
+  namespace: opengnosis
+spec:
+  host: gnosis-journal-command.opengnosis.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 1000
+      http:
+        http1MaxPendingRequests: 1024
+        http2MaxRequests: 1024
+        maxRequestsPerConnection: 10
+        maxRetries: 3
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 20s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+      consecutiveGatewayErrors: 5
+      consecutive5xxErrors: 5
+---
+# Circuit breaker for Analytics Query Service
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: gnosis-analytics-query-circuit-breaker
+  namespace: opengnosis
+spec:
+  host: gnosis-analytics-query.opengnosis.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 1000
+      http:
+        http1MaxPendingRequests: 1024
+        http2MaxRequests: 1024
+        maxRequestsPerConnection: 10
+        maxRetries: 2
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+---
+# Circuit breaker for Scheduler Service (longer timeouts for optimization)
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: gnosis-scheduler-circuit-breaker
+  namespace: opengnosis
+spec:
+  host: gnosis-scheduler.opengnosis.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 500
+      http:
+        http1MaxPendingRequests: 512
+        http2MaxRequests: 512
+        maxRequestsPerConnection: 5
+        maxRetries: 2
+    outlierDetection:
+      consecutiveErrors: 3
+      interval: 60s
+      baseEjectionTime: 60s
+      maxEjectionPercent: 30
+      minHealthPercent: 70

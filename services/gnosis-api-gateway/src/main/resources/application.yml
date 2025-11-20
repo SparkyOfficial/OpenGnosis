@@ -42,6 +42,12 @@ management:
     distribution:
       percentiles-histogram:
         http.server.requests: true
+  tracing:
+    sampling:
+      probability: 1.0  # 100% sampling for development, reduce in production
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://jaeger-collector.observability.svc.cluster.local:9411/api/v2/spans}
 
 jwt:
   secret: ${JWT_SECRET:opengnosis-secret-key-change-in-production-minimum-256-bits}
@@ -52,3 +58,4 @@ logging:
     com.opengnosis.gateway: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%X{traceId}] [%thread] %-5level %logger{36} - %msg%n"
+    level: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"

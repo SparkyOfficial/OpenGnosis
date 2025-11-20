@@ -54,9 +54,17 @@ management:
     export:
       prometheus:
         enabled: true
+  tracing:
+    sampling:
+      probability: 1.0  # 100% sampling for development, reduce in production
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://jaeger-collector.observability.svc.cluster.local:9411/api/v2/spans}
 
 logging:
   level:
     com.opengnosis: INFO
     org.springframework: INFO
     org.hibernate: WARN
+  pattern:
+    level: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"

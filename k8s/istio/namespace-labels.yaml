@@ -1,0 +1,42 @@
+# Namespace configuration with Istio sidecar injection labels
+# Apply these labels to enable automatic sidecar injection for application namespaces
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opengnosis
+  labels:
+    name: opengnosis
+    environment: production
+    # Enable automatic Istio sidecar injection
+    istio-injection: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opengnosis-dev
+  labels:
+    name: opengnosis-dev
+    environment: development
+    # Enable automatic Istio sidecar injection
+    istio-injection: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opengnosis-staging
+  labels:
+    name: opengnosis-staging
+    environment: staging
+    # Enable automatic Istio sidecar injection
+    istio-injection: enabled
+---
+# Observability namespace for monitoring tools
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    name: observability
+    # Disable sidecar injection for monitoring tools
+    istio-injection: disabled

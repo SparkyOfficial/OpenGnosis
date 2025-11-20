@@ -1,0 +1,86 @@
+# Istio Gateway configuration for external traffic ingress
+# This gateway handles all incoming traffic to the OpenGnosis platform
+
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: opengnosis-gateway
+  namespace: opengnosis
+spec:
+  # Use the default Istio ingress gateway
+  selector:
+    istio: ingressgateway
+  servers:
+    # HTTP server (redirect to HTTPS)
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*.opengnosis.io"
+        - "opengnosis.io"
+      # Redirect HTTP to HTTPS
+      tls:
+        httpsRedirect: true
+    
+    # HTTPS server
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      hosts:
+        - "*.opengnosis.io"
+        - "opengnosis.io"
+      tls:
+        mode: SIMPLE
+        credentialName: opengnosis-tls-cert  # Secret containing TLS certificate
+        minProtocolVersion: TLSV1_3
+---
+# Gateway for development environment
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: opengnosis-dev-gateway
+  namespace: opengnosis-dev
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*.dev.opengnosis.io"
+        - "dev.opengnosis.io"
+---
+# Gateway for staging environment
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: opengnosis-staging-gateway
+  namespace: opengnosis-staging
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*.staging.opengnosis.io"
+        - "staging.opengnosis.io"
+      tls:
+        httpsRedirect: true
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      hosts:
+        - "*.staging.opengnosis.io"
+        - "staging.opengnosis.io"
+      tls:
+        mode: SIMPLE
+        credentialName: opengnosis-staging-tls-cert
+        minProtocolVersion: TLSV1_3

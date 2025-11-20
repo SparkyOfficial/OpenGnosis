@@ -1,0 +1,140 @@
+# Custom Helm values for Istio installation
+# This file contains configuration for the Istio control plane (istiod)
+
+global:
+  # Istio control plane configuration
+  istioNamespace: istio-system
+  
+  # Proxy configuration for all sidecars
+  proxy:
+    # Resource limits for sidecar proxies
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    
+    # Logging level for Envoy proxies
+    logLevel: warning
+    
+    # Component log levels
+    componentLogLevel: "misc:error"
+    
+    # Access log configuration
+    accessLogFile: /dev/stdout
+    accessLogEncoding: JSON
+    accessLogFormat: |
+      {
+        "start_time": "%START_TIME%",
+        "method": "%REQ(:METHOD)%",
+        "path": "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%",
+        "protocol": "%PROTOCOL%",
+        "response_code": "%RESPONSE_CODE%",
+        "response_flags": "%RESPONSE_FLAGS%",
+        "bytes_received": "%BYTES_RECEIVED%",
+        "bytes_sent": "%BYTES_SENT%",
+        "duration": "%DURATION%",
+        "upstream_service_time": "%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%",
+        "x_forwarded_for": "%REQ(X-FORWARDED-FOR)%",
+        "user_agent": "%REQ(USER-AGENT)%",
+        "request_id": "%REQ(X-REQUEST-ID)%",
+        "authority": "%REQ(:AUTHORITY)%",
+        "upstream_host": "%UPSTREAM_HOST%",
+        "upstream_cluster": "%UPSTREAM_CLUSTER%",
+        "trace_id": "%REQ(X-B3-TRACEID)%"
+      }
+
+# Pilot (istiod) configuration
+pilot:
+  # Enable automatic sidecar injection
+  enableProtocolSniffingForOutbound: true
+  enableProtocolSniffingForInbound: true
+  
+  # Resource configuration for istiod
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2048Mi
+    limits:
+      cpu: 2000m
+      memory: 4096Mi
+  
+  # Autoscaling configuration
+  autoscaleEnabled: true
+  autoscaleMin: 2
+  autoscaleMax: 5
+  
+  # Tracing configuration
+  traceSampling: 1.0  # 100% sampling for development, reduce in production
+  
+  # Environment variables
+  env:
+    # Enable distributed tracing
+    PILOT_ENABLE_PROTOCOL_SNIFFING_FOR_OUTBOUND: "true"
+    PILOT_ENABLE_PROTOCOL_SNIFFING_FOR_INBOUND: "true"
+
+# Telemetry configuration
+telemetry:
+  enabled: true
+  v2:
+    enabled: true
+    prometheus:
+      enabled: true
+    stackdriver:
+      enabled: false
+
+# Security configuration
+security:
+  # Enable automatic mTLS
+  enableAutoMtls: true
+
+# Mesh configuration
+meshConfig:
+  # Default configuration for all proxies in the mesh
+  defaultConfig:
+    # Distributed tracing configuration
+    tracing:
+      zipkin:
+        address: jaeger-collector.observability:9411
+      sampling: 100.0
+      max_path_tag_length: 256
+    
+    # Metrics configuration
+    proxyMetadata:
+      ISTIO_META_DNS_CAPTURE: "true"
+      ISTIO_META_DNS_AUTO_ALLOCATE: "true"
+  
+  # Access log configuration
+  accessLogFile: /dev/stdout
+  accessLogEncoding: JSON
+  
+  # Enable automatic mTLS
+  enableAutoMtls: true
+  
+  # Outbound traffic policy
+  outboundTrafficPolicy:
+    mode: ALLOW_ANY
+  
+  # Default service discovery
+  defaultServiceExportTo:
+    - "*"
+  
+  # Default virtual service export
+  defaultVirtualServiceExportTo:
+    - "*"
+  
+  # Default destination rule export
+  defaultDestinationRuleExportTo:
+    - "*"
+
+# Ingress gateway configuration (minimal, detailed config in separate file)
+ingressGateways:
+  - name: istio-ingressgateway
+    enabled: true
+    
+# Egress gateway configuration
+egressGateways:
+  - name: istio-egressgateway
+    enabled: false

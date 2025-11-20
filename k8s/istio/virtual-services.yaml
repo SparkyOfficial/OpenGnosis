@@ -1,0 +1,284 @@
+# VirtualService configurations for traffic routing and management
+# These define how traffic is routed to services, including canary deployments
+
+# API Gateway VirtualService - Entry point for all external traffic
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-api-gateway
+  namespace: opengnosis
+spec:
+  hosts:
+    - "api.opengnosis.io"
+    - "gnosis-api-gateway.opengnosis.svc.cluster.local"
+  gateways:
+    - opengnosis-gateway
+    - mesh  # Allow internal mesh traffic
+  http:
+    - match:
+        - uri:
+            prefix: "/api/v1/auth"
+      route:
+        - destination:
+            host: gnosis-iam.opengnosis.svc.cluster.local
+            port:
+              number: 8080
+      timeout: 5s
+      retries:
+        attempts: 3
+        perTryTimeout: 2s
+        retryOn: 5xx,reset,connect-failure,refused-stream
+    
+    - match:
+        - uri:
+            prefix: "/api/v1/schools"
+        - uri:
+            prefix: "/api/v1/classes"
+        - uri:
+            prefix: "/api/v1/subjects"
+      route:
+        - destination:
+            host: gnosis-structure.opengnosis.svc.cluster.local
+            port:
+              number: 8080
+      timeout: 5s
+      retries:
+        attempts: 3
+        perTryTimeout: 2s
+        retryOn: 5xx,reset,connect-failure,refused-stream
+    
+    - match:
+        - uri:
+            prefix: "/api/v1/schedules"
+      route:
+        - destination:
+            host: gnosis-scheduler.opengnosis.svc.cluster.local
+            port:
+              number: 8080
+      timeout: 30s  # Longer timeout for optimization operations
+      retries:
+        attempts: 2
+        perTryTimeout: 15s
+        retryOn: 5xx,reset,connect-failure
+    
+    - match:
+        - uri:
+            prefix: "/api/v1/commands"
+      route:
+        - destination:
+            host: gnosis-journal-command.opengnosis.svc.cluster.local
+            port:
+              number: 8080
+      timeout: 3s
+      retries:
+        attempts: 3
+        perTryTimeout: 1s
+        retryOn: 5xx,reset,connect-failure,refused-stream
+    
+    - match:
+        - uri:
+            prefix: "/api/v1/students"
+        - uri:
+            prefix: "/api/v1/analytics"
+        - uri:
+            prefix: "/api/v1/search"
+      route:
+        - destination:
+            host: gnosis-analytics-query.opengnosis.svc.cluster.local
+            port:
+              number: 8080
+      timeout: 10s
+      retries:
+        attempts: 2
+        perTryTimeout: 5s
+        retryOn: 5xx,reset,connect-failure
+    
+    - match:
+        - uri:
+            prefix: "/api/v1/notifications"
+      route:
+        - destination:
+            host: gnosis-notifier.opengnosis.svc.cluster.local
+            port:
+              number: 8080
+      timeout: 5s
+      retries:
+        attempts: 3
+        perTryTimeout: 2s
+        retryOn: 5xx,reset,connect-failure
+---
+# IAM Service VirtualService with canary deployment support
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-iam
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-iam.opengnosis.svc.cluster.local
+  http:
+    - match:
+        - headers:
+            x-canary:
+              exact: "true"
+      route:
+        - destination:
+            host: gnosis-iam.opengnosis.svc.cluster.local
+            subset: canary
+          weight: 100
+    - route:
+        - destination:
+            host: gnosis-iam.opengnosis.svc.cluster.local
+            subset: stable
+          weight: 90
+        - destination:
+            host: gnosis-iam.opengnosis.svc.cluster.local
+            subset: canary
+          weight: 10
+      timeout: 5s
+      retries:
+        attempts: 3
+        perTryTimeout: 2s
+        retryOn: 5xx,reset,connect-failure,refused-stream
+---
+# Structure Service VirtualService with canary deployment
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-structure
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-structure.opengnosis.svc.cluster.local
+  http:
+    - match:
+        - headers:
+            x-canary:
+              exact: "true"
+      route:
+        - destination:
+            host: gnosis-structure.opengnosis.svc.cluster.local
+            subset: canary
+          weight: 100
+    - route:
+        - destination:
+            host: gnosis-structure.opengnosis.svc.cluster.local
+            subset: stable
+          weight: 90
+        - destination:
+            host: gnosis-structure.opengnosis.svc.cluster.local
+            subset: canary
+          weight: 10
+      timeout: 5s
+      retries:
+        attempts: 3
+        perTryTimeout: 2s
+        retryOn: 5xx,reset,connect-failure
+---
+# Scheduler Service VirtualService
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-scheduler
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-scheduler.opengnosis.svc.cluster.local
+  http:
+    - match:
+        - uri:
+            prefix: "/api/v1/schedules/optimize"
+      route:
+        - destination:
+            host: gnosis-scheduler.opengnosis.svc.cluster.local
+            port:
+              number: 8080
+      timeout: 60s  # Extended timeout for optimization
+      retries:
+        attempts: 1
+        perTryTimeout: 60s
+    - route:
+        - destination:
+            host: gnosis-scheduler.opengnosis.svc.cluster.local
+            port:
+              number: 8080
+      timeout: 10s
+      retries:
+        attempts: 3
+        perTryTimeout: 5s
+        retryOn: 5xx,reset,connect-failure
+---
+# Journal Command Service VirtualService
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-journal-command
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-journal-command.opengnosis.svc.cluster.local
+  http:
+    - route:
+        - destination:
+            host: gnosis-journal-command.opengnosis.svc.cluster.local
+            port:
+              number: 8080
+      timeout: 3s
+      retries:
+        attempts: 3
+        perTryTimeout: 1s
+        retryOn: 5xx,reset,connect-failure,refused-stream
+---
+# Analytics Query Service VirtualService
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-analytics-query
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-analytics-query.opengnosis.svc.cluster.local
+  http:
+    - match:
+        - uri:
+            prefix: "/api/v1/search"
+      route:
+        - destination:
+            host: gnosis-analytics-query.opengnosis.svc.cluster.local
+            port:
+              number: 8080
+      timeout: 15s  # Extended timeout for search operations
+      retries:
+        attempts: 2
+        perTryTimeout: 7s
+    - route:
+        - destination:
+            host: gnosis-analytics-query.opengnosis.svc.cluster.local
+            port:
+              number: 8080
+      timeout: 10s
+      retries:
+        attempts: 2
+        perTryTimeout: 5s
+        retryOn: 5xx,reset,connect-failure
+---
+# Notifier Service VirtualService
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-notifier
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-notifier.opengnosis.svc.cluster.local
+  http:
+    - route:
+        - destination:
+            host: gnosis-notifier.opengnosis.svc.cluster.local
+            port:
+              number: 8080
+      timeout: 5s
+      retries:
+        attempts: 3
+        perTryTimeout: 2s
+        retryOn: 5xx,reset,connect-failure

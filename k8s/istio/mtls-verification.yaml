@@ -1,0 +1,58 @@
+# Scripts and configurations for verifying mTLS is working correctly
+
+# This file contains commands and configurations to verify mTLS setup
+
+---
+# ServiceEntry for external services (if needed)
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: external-services
+  namespace: opengnosis
+spec:
+  hosts:
+    - "*.googleapis.com"
+    - "*.twilio.com"
+  ports:
+    - number: 443
+      name: https
+      protocol: HTTPS
+  location: MESH_EXTERNAL
+  resolution: DNS
+---
+# AuthorizationPolicy to enforce mTLS at the application level
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: require-mtls
+  namespace: opengnosis
+spec:
+  # Apply to all workloads in the namespace
+  action: ALLOW
+  rules:
+    # Allow requests that have mTLS identity
+    - from:
+        - source:
+            principals: ["*"]
+      to:
+        - operation:
+            methods: ["*"]
+      when:
+        - key: connection.sni
+          values: ["*"]
+---
+# RequestAuthentication for JWT validation (works with mTLS)
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: jwt-auth
+  namespace: opengnosis
+spec:
+  selector:
+    matchLabels:
+      app: gnosis-api-gateway
+  jwtRules:
+    - issuer: "https://auth.opengnosis.io"
+      jwksUri: "https://auth.opengnosis.io/.well-known/jwks.json"
+      audiences:
+        - "opengnosis-api"

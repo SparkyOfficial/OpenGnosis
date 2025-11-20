@@ -1,0 +1,180 @@
+# Comprehensive retry and timeout policies for all services
+# These policies ensure resilience and prevent cascading failures
+
+# Retry and timeout policy for IAM Service
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-iam-retry-timeout
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-iam.opengnosis.svc.cluster.local
+  http:
+    - route:
+        - destination:
+            host: gnosis-iam.opengnosis.svc.cluster.local
+      # Total timeout for the request
+      timeout: 5s
+      # Retry configuration
+      retries:
+        # Number of retry attempts
+        attempts: 3
+        # Timeout per retry attempt
+        perTryTimeout: 2s
+        # Conditions that trigger a retry
+        retryOn: 5xx,reset,connect-failure,refused-stream,retriable-4xx
+        # Retry only on specific HTTP methods (idempotent operations)
+        retryRemoteLocalities: true
+---
+# Retry and timeout policy for Structure Service
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-structure-retry-timeout
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-structure.opengnosis.svc.cluster.local
+  http:
+    - route:
+        - destination:
+            host: gnosis-structure.opengnosis.svc.cluster.local
+      timeout: 5s
+      retries:
+        attempts: 3
+        perTryTimeout: 2s
+        retryOn: 5xx,reset,connect-failure,refused-stream
+---
+# Retry and timeout policy for Scheduler Service
+# Different timeouts for optimization vs regular operations
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-scheduler-retry-timeout
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-scheduler.opengnosis.svc.cluster.local
+  http:
+    # Optimization endpoint - longer timeout, fewer retries
+    - match:
+        - uri:
+            prefix: "/api/v1/schedules/optimize"
+      route:
+        - destination:
+            host: gnosis-scheduler.opengnosis.svc.cluster.local
+      timeout: 60s
+      retries:
+        attempts: 1
+        perTryTimeout: 60s
+        retryOn: connect-failure,refused-stream
+    
+    # Regular endpoints - standard timeout and retries
+    - route:
+        - destination:
+            host: gnosis-scheduler.opengnosis.svc.cluster.local
+      timeout: 10s
+      retries:
+        attempts: 3
+        perTryTimeout: 5s
+        retryOn: 5xx,reset,connect-failure,refused-stream
+---
+# Retry and timeout policy for Journal Command Service
+# Fast timeouts for command operations
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-journal-command-retry-timeout
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-journal-command.opengnosis.svc.cluster.local
+  http:
+    - route:
+        - destination:
+            host: gnosis-journal-command.opengnosis.svc.cluster.local
+      timeout: 3s
+      retries:
+        attempts: 3
+        perTryTimeout: 1s
+        retryOn: 5xx,reset,connect-failure,refused-stream
+        # Retry budget to prevent retry storms
+        retryRemoteLocalities: true
+---
+# Retry and timeout policy for Analytics Query Service
+# Different timeouts for search vs regular queries
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-analytics-query-retry-timeout
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-analytics-query.opengnosis.svc.cluster.local
+  http:
+    # Search endpoints - longer timeout
+    - match:
+        - uri:
+            prefix: "/api/v1/search"
+      route:
+        - destination:
+            host: gnosis-analytics-query.opengnosis.svc.cluster.local
+      timeout: 15s
+      retries:
+        attempts: 2
+        perTryTimeout: 7s
+        retryOn: 5xx,reset,connect-failure
+    
+    # Regular query endpoints
+    - route:
+        - destination:
+            host: gnosis-analytics-query.opengnosis.svc.cluster.local
+      timeout: 10s
+      retries:
+        attempts: 2
+        perTryTimeout: 5s
+        retryOn: 5xx,reset,connect-failure
+---
+# Retry and timeout policy for Notifier Service
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-notifier-retry-timeout
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-notifier.opengnosis.svc.cluster.local
+  http:
+    - route:
+        - destination:
+            host: gnosis-notifier.opengnosis.svc.cluster.local
+      timeout: 5s
+      retries:
+        attempts: 3
+        perTryTimeout: 2s
+        retryOn: 5xx,reset,connect-failure,refused-stream
+---
+# Fault injection for testing (disabled by default)
+# Uncomment to test resilience
+# apiVersion: networking.istio.io/v1beta1
+# kind: VirtualService
+# metadata:
+#   name: gnosis-iam-fault-injection
+#   namespace: opengnosis
+# spec:
+#   hosts:
+#     - gnosis-iam.opengnosis.svc.cluster.local
+#   http:
+#     - fault:
+#         delay:
+#           percentage:
+#             value: 10.0
+#           fixedDelay: 5s
+#         abort:
+#           percentage:
+#             value: 5.0
+#           httpStatus: 503
+#       route:
+#         - destination:
+#             host: gnosis-iam.opengnosis.svc.cluster.local

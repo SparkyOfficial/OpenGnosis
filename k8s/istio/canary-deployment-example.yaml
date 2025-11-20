@@ -1,0 +1,170 @@
+# Example canary deployment configuration for gradual rollout
+# This demonstrates how to perform a canary release with traffic shifting
+
+# Step 1: Deploy canary version alongside stable version
+# The canary deployment has the label version: canary
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gnosis-iam-stable
+  namespace: opengnosis
+  labels:
+    app: gnosis-iam
+    version: stable
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: gnosis-iam
+      version: stable
+  template:
+    metadata:
+      labels:
+        app: gnosis-iam
+        version: stable
+    spec:
+      containers:
+        - name: gnosis-iam
+          image: opengnosis/gnosis-iam:1.0.0
+          ports:
+            - containerPort: 8080
+          env:
+            - name: VERSION
+              value: "stable"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gnosis-iam-canary
+  namespace: opengnosis
+  labels:
+    app: gnosis-iam
+    version: canary
+spec:
+  replicas: 1  # Start with fewer replicas
+  selector:
+    matchLabels:
+      app: gnosis-iam
+      version: canary
+  template:
+    metadata:
+      labels:
+        app: gnosis-iam
+        version: canary
+    spec:
+      containers:
+        - name: gnosis-iam
+          image: opengnosis/gnosis-iam:1.1.0  # New version
+          ports:
+            - containerPort: 8080
+          env:
+            - name: VERSION
+              value: "canary"
+---
+# Step 2: VirtualService for gradual traffic shift
+# Phase 1: 10% canary, 90% stable
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-iam-canary-phase1
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-iam.opengnosis.svc.cluster.local
+  http:
+    - route:
+        - destination:
+            host: gnosis-iam.opengnosis.svc.cluster.local
+            subset: stable
+          weight: 90
+        - destination:
+            host: gnosis-iam.opengnosis.svc.cluster.local
+            subset: canary
+          weight: 10
+---
+# Phase 2: 50% canary, 50% stable (apply after monitoring Phase 1)
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-iam-canary-phase2
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-iam.opengnosis.svc.cluster.local
+  http:
+    - route:
+        - destination:
+            host: gnosis-iam.opengnosis.svc.cluster.local
+            subset: stable
+          weight: 50
+        - destination:
+            host: gnosis-iam.opengnosis.svc.cluster.local
+            subset: canary
+          weight: 50
+---
+# Phase 3: 100% canary (final cutover)
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-iam-canary-phase3
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-iam.opengnosis.svc.cluster.local
+  http:
+    - route:
+        - destination:
+            host: gnosis-iam.opengnosis.svc.cluster.local
+            subset: canary
+          weight: 100
+---
+# Header-based routing for testing canary before general rollout
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-iam-canary-header-based
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-iam.opengnosis.svc.cluster.local
+  http:
+    # Route requests with x-canary: true header to canary
+    - match:
+        - headers:
+            x-canary:
+              exact: "true"
+      route:
+        - destination:
+            host: gnosis-iam.opengnosis.svc.cluster.local
+            subset: canary
+    # Route requests from specific test users to canary
+    - match:
+        - headers:
+            x-user-id:
+              regex: "^(test-user-1|test-user-2|test-user-3)$"
+      route:
+        - destination:
+            host: gnosis-iam.opengnosis.svc.cluster.local
+            subset: canary
+    # All other traffic goes to stable
+    - route:
+        - destination:
+            host: gnosis-iam.opengnosis.svc.cluster.local
+            subset: stable
+---
+# Rollback configuration (if canary fails)
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gnosis-iam-rollback
+  namespace: opengnosis
+spec:
+  hosts:
+    - gnosis-iam.opengnosis.svc.cluster.local
+  http:
+    - route:
+        - destination:
+            host: gnosis-iam.opengnosis.svc.cluster.local
+            subset: stable
+          weight: 100
