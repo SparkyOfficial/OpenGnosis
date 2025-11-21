@@ -1,0 +1,399 @@
+---
+# Grafana Dashboards ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+data:
+  spring-boot-dashboard.json: |
+    {
+      "dashboard": {
+        "title": "Spring Boot Application Metrics",
+        "tags": ["spring-boot", "opengnosis"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "JVM Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(jvm_memory_used_bytes{namespace=\"opengnosis\"}) by (app, area)",
+                "legendFormat": "{{app}} - {{area}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "HTTP Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(http_server_requests_seconds_count{namespace=\"opengnosis\"}[5m])) by (app, uri)",
+                "legendFormat": "{{app}} - {{uri}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "HTTP Request Duration (p95)",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{namespace=\"opengnosis\"}[5m])) by (app, le))",
+                "legendFormat": "{{app}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "HTTP Error Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(http_server_requests_seconds_count{namespace=\"opengnosis\",status=~\"5..\"}[5m])) by (app)",
+                "legendFormat": "{{app}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          },
+          {
+            "id": 5,
+            "title": "Thread Pool Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "jvm_threads_live_threads{namespace=\"opengnosis\"}",
+                "legendFormat": "{{app}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+          },
+          {
+            "id": 6,
+            "title": "Garbage Collection Time",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(jvm_gc_pause_seconds_sum{namespace=\"opengnosis\"}[5m])",
+                "legendFormat": "{{app}} - {{action}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+          }
+        ],
+        "refresh": "30s",
+        "time": {"from": "now-1h", "to": "now"}
+      }
+    }
+  
+  istio-dashboard.json: |
+    {
+      "dashboard": {
+        "title": "Istio Service Mesh Metrics",
+        "tags": ["istio", "service-mesh", "opengnosis"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Service Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(istio_requests_total{destination_namespace=\"opengnosis\"}[5m])) by (destination_service)",
+                "legendFormat": "{{destination_service}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Service Success Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(istio_requests_total{destination_namespace=\"opengnosis\",response_code!~\"5..\"}[5m])) by (destination_service) / sum(rate(istio_requests_total{destination_namespace=\"opengnosis\"}[5m])) by (destination_service)",
+                "legendFormat": "{{destination_service}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Request Duration (p95)",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(istio_request_duration_milliseconds_bucket{destination_namespace=\"opengnosis\"}[5m])) by (destination_service, le))",
+                "legendFormat": "{{destination_service}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Service-to-Service Traffic",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(istio_requests_total{destination_namespace=\"opengnosis\"}[5m])) by (source_app, destination_service)",
+                "legendFormat": "{{source_app}} -> {{destination_service}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          },
+          {
+            "id": 5,
+            "title": "mTLS Connection Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(istio_requests_total{destination_namespace=\"opengnosis\",connection_security_policy=\"mutual_tls\"}) / sum(istio_requests_total{destination_namespace=\"opengnosis\"})",
+                "legendFormat": "mTLS Coverage"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+          },
+          {
+            "id": 6,
+            "title": "Circuit Breaker Status",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(istio_requests_total{destination_namespace=\"opengnosis\",response_flags=~\".*UO.*\"}[5m])) by (destination_service)",
+                "legendFormat": "{{destination_service}} - Overflow"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+          }
+        ],
+        "refresh": "30s",
+        "time": {"from": "now-1h", "to": "now"}
+      }
+    }
+
+  business-metrics-dashboard.json: |
+    {
+      "dashboard": {
+        "title": "OpenGnosis Business Metrics",
+        "tags": ["business", "opengnosis"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Grade Placement Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(grade_placement_total{namespace=\"opengnosis\"}[5m]))",
+                "legendFormat": "Grades Placed/sec"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Attendance Marking Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(attendance_marked_total{namespace=\"opengnosis\"}[5m]))",
+                "legendFormat": "Attendance Marked/sec"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Student Enrollment Count",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(student_enrollment_total{namespace=\"opengnosis\"})",
+                "legendFormat": "Total Enrollments"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Active Users",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(active_users_total{namespace=\"opengnosis\"})",
+                "legendFormat": "Active Users"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 6, "y": 8}
+          },
+          {
+            "id": 5,
+            "title": "Notification Delivery Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(notification_sent_total{namespace=\"opengnosis\"}[5m])) by (channel)",
+                "legendFormat": "{{channel}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          },
+          {
+            "id": 6,
+            "title": "Schedule Optimization Duration",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(schedule_optimization_duration_seconds_bucket{namespace=\"opengnosis\"}[5m])) by (le))",
+                "legendFormat": "p95 Duration"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+          },
+          {
+            "id": 7,
+            "title": "Query Performance (Analytics)",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(analytics_query_duration_seconds_bucket{namespace=\"opengnosis\"}[5m])) by (query_type, le))",
+                "legendFormat": "{{query_type}} - p95"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+          },
+          {
+            "id": 8,
+            "title": "Command Processing Latency",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(command_processing_duration_seconds_bucket{namespace=\"opengnosis\"}[5m])) by (command_type, le))",
+                "legendFormat": "{{command_type}} - p95"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+          },
+          {
+            "id": 9,
+            "title": "Event Publishing Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(kafka_events_published_total{namespace=\"opengnosis\"}[5m])) by (event_type)",
+                "legendFormat": "{{event_type}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+          }
+        ],
+        "refresh": "30s",
+        "time": {"from": "now-1h", "to": "now"}
+      }
+    }
+  
+  system-overview-dashboard.json: |
+    {
+      "dashboard": {
+        "title": "OpenGnosis System Overview",
+        "tags": ["overview", "opengnosis"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Service Availability",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "avg(up{namespace=\"opengnosis\"}) by (app)",
+                "legendFormat": "{{app}}"
+              }
+            ],
+            "gridPos": {"h": 6, "w": 24, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Overall Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(http_server_requests_seconds_count{namespace=\"opengnosis\"}[5m]))",
+                "legendFormat": "Total Requests/sec"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6}
+          },
+          {
+            "id": 3,
+            "title": "Overall Error Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(http_server_requests_seconds_count{namespace=\"opengnosis\",status=~\"5..\"}[5m])) / sum(rate(http_server_requests_seconds_count{namespace=\"opengnosis\"}[5m]))",
+                "legendFormat": "Error Rate %"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6}
+          },
+          {
+            "id": 4,
+            "title": "API Gateway Latency (p95)",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{namespace=\"opengnosis\",app=\"gnosis-api-gateway\"}[5m])) by (le))",
+                "legendFormat": "p95 Latency"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14}
+          },
+          {
+            "id": 5,
+            "title": "Database Connection Pool",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "hikaricp_connections_active{namespace=\"opengnosis\"}",
+                "legendFormat": "{{app}} - Active"
+              },
+              {
+                "expr": "hikaricp_connections_idle{namespace=\"opengnosis\"}",
+                "legendFormat": "{{app}} - Idle"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14}
+          },
+          {
+            "id": 6,
+            "title": "Kafka Consumer Lag",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "kafka_consumer_lag{namespace=\"opengnosis\"}",
+                "legendFormat": "{{app}} - {{topic}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22}
+          },
+          {
+            "id": 7,
+            "title": "Redis Cache Hit Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(redis_cache_hits_total{namespace=\"opengnosis\"}[5m])) / (sum(rate(redis_cache_hits_total{namespace=\"opengnosis\"}[5m])) + sum(rate(redis_cache_misses_total{namespace=\"opengnosis\"}[5m])))",
+                "legendFormat": "Cache Hit Rate"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22}
+          }
+        ],
+        "refresh": "30s",
+        "time": {"from": "now-1h", "to": "now"}
+      }
+    }

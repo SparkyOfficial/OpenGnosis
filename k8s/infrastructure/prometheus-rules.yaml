@@ -1,0 +1,243 @@
+---
+# PrometheusRule for High Error Rate Alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: opengnosis-error-rate-alerts
+  namespace: opengnosis
+  labels:
+    team: opengnosis
+    prometheus: opengnosis
+spec:
+  groups:
+  - name: error-rate-alerts
+    interval: 30s
+    rules:
+    - alert: HighErrorRate
+      expr: |
+        (
+          sum(rate(http_server_requests_seconds_count{namespace="opengnosis",status=~"5.."}[5m])) by (app)
+          /
+          sum(rate(http_server_requests_seconds_count{namespace="opengnosis"}[5m])) by (app)
+        ) > 0.05
+      for: 5m
+      labels:
+        severity: critical
+        team: opengnosis
+      annotations:
+        summary: "High error rate detected in {{ $labels.app }}"
+        description: "Service {{ $labels.app }} has an error rate of {{ $value | humanizePercentage }} (threshold: 5%)"
+        runbook_url: "https://docs.opengnosis.io/runbooks/high-error-rate"
+    
+    - alert: ServiceDown
+      expr: up{namespace="opengnosis"} == 0
+      for: 2m
+      labels:
+        severity: critical
+        team: opengnosis
+      annotations:
+        summary: "Service {{ $labels.app }} is down"
+        description: "Service {{ $labels.app }} has been down for more than 2 minutes"
+        runbook_url: "https://docs.opengnosis.io/runbooks/service-down"
+    
+    - alert: HighClientErrorRate
+      expr: |
+        (
+          sum(rate(http_server_requests_seconds_count{namespace="opengnosis",status=~"4.."}[5m])) by (app)
+          /
+          sum(rate(http_server_requests_seconds_count{namespace="opengnosis"}[5m])) by (app)
+        ) > 0.10
+      for: 10m
+      labels:
+        severity: warning
+        team: opengnosis
+      annotations:
+        summary: "High client error rate in {{ $labels.app }}"
+        description: "Service {{ $labels.app }} has a 4xx error rate of {{ $value | humanizePercentage }} (threshold: 10%)"
+---
+# PrometheusRule for High Latency Alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: opengnosis-latency-alerts
+  namespace: opengnosis
+  labels:
+    team: opengnosis
+    prometheus: opengnosis
+spec:
+  groups:
+  - name: latency-alerts
+    interval: 30s
+    rules:
+    - alert: HighLatencyP95
+      expr: |
+        histogram_quantile(0.95,
+          sum(rate(http_server_requests_seconds_bucket{namespace="opengnosis"}[5m])) by (app, le)
+        ) > 0.5
+      for: 5m
+      labels:
+        severity: warning
+        team: opengnosis
+      annotations:
+        summary: "High latency (p95) detected in {{ $labels.app }}"
+        description: "Service {{ $labels.app }} has p95 latency of {{ $value }}s (threshold: 500ms)"
+        runbook_url: "https://docs.opengnosis.io/runbooks/high-latency"
+    
+    - alert: HighLatencyP99
+      expr: |
+        histogram_quantile(0.99,
+          sum(rate(http_server_requests_seconds_bucket{namespace="opengnosis"}[5m])) by (app, le)
+        ) > 1.0
+      for: 5m
+      labels:
+        severity: critical
+        team: opengnosis
+      annotations:
+        summary: "Very high latency (p99) detected in {{ $labels.app }}"
+        description: "Service {{ $labels.app }} has p99 latency of {{ $value }}s (threshold: 1s)"
+        runbook_url: "https://docs.opengnosis.io/runbooks/high-latency"
+    
+    - alert: APIGatewayHighLatency
+      expr: |
+        histogram_quantile(0.95,
+          sum(rate(http_server_requests_seconds_bucket{namespace="opengnosis",app="gnosis-api-gateway"}[5m])) by (le)
+        ) > 0.2
+      for: 5m
+      labels:
+        severity: critical
+        team: opengnosis
+      annotations:
+        summary: "API Gateway experiencing high latency"
+        description: "API Gateway p95 latency is {{ $value }}s (threshold: 200ms)"
+        runbook_url: "https://docs.opengnosis.io/runbooks/gateway-latency"
+---
+# PrometheusRule for Resource Alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: opengnosis-resource-alerts
+  namespace: opengnosis
+  labels:
+    team: opengnosis
+    prometheus: opengnosis
+spec:
+  groups:
+  - name: resource-alerts
+    interval: 30s
+    rules:
+    - alert: HighMemoryUsage
+      expr: |
+        (
+          sum(jvm_memory_used_bytes{namespace="opengnosis",area="heap"}) by (app)
+          /
+          sum(jvm_memory_max_bytes{namespace="opengnosis",area="heap"}) by (app)
+        ) > 0.85
+      for: 5m
+      labels:
+        severity: warning
+        team: opengnosis
+      annotations:
+        summary: "High memory usage in {{ $labels.app }}"
+        description: "Service {{ $labels.app }} is using {{ $value | humanizePercentage }} of heap memory (threshold: 85%)"
+        runbook_url: "https://docs.opengnosis.io/runbooks/high-memory"
+    
+    - alert: HighCPUUsage
+      expr: |
+        rate(process_cpu_seconds_total{namespace="opengnosis"}[5m]) > 0.8
+      for: 10m
+      labels:
+        severity: warning
+        team: opengnosis
+      annotations:
+        summary: "High CPU usage in {{ $labels.app }}"
+        description: "Service {{ $labels.app }} CPU usage is {{ $value | humanizePercentage }} (threshold: 80%)"
+    
+    - alert: HighThreadCount
+      expr: jvm_threads_live_threads{namespace="opengnosis"} > 500
+      for: 5m
+      labels:
+        severity: warning
+        team: opengnosis
+      annotations:
+        summary: "High thread count in {{ $labels.app }}"
+        description: "Service {{ $labels.app }} has {{ $value }} live threads (threshold: 500)"
+    
+    - alert: DatabaseConnectionPoolExhaustion
+      expr: |
+        (
+          hikaricp_connections_active{namespace="opengnosis"}
+          /
+          hikaricp_connections_max{namespace="opengnosis"}
+        ) > 0.9
+      for: 5m
+      labels:
+        severity: critical
+        team: opengnosis
+      annotations:
+        summary: "Database connection pool near exhaustion in {{ $labels.app }}"
+        description: "Service {{ $labels.app }} is using {{ $value | humanizePercentage }} of database connections (threshold: 90%)"
+        runbook_url: "https://docs.opengnosis.io/runbooks/db-pool-exhaustion"
+---
+# PrometheusRule for Business Metrics Alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: opengnosis-business-alerts
+  namespace: opengnosis
+  labels:
+    team: opengnosis
+    prometheus: opengnosis
+spec:
+  groups:
+  - name: business-alerts
+    interval: 60s
+    rules:
+    - alert: LowGradePlacementRate
+      expr: |
+        sum(rate(grade_placement_total{namespace="opengnosis"}[10m])) < 0.1
+      for: 30m
+      labels:
+        severity: warning
+        team: opengnosis
+      annotations:
+        summary: "Low grade placement activity"
+        description: "Grade placement rate is {{ $value }} per second (expected > 0.1/s during school hours)"
+    
+    - alert: HighNotificationFailureRate
+      expr: |
+        (
+          sum(rate(notification_failed_total{namespace="opengnosis"}[5m]))
+          /
+          sum(rate(notification_sent_total{namespace="opengnosis"}[5m]))
+        ) > 0.1
+      for: 10m
+      labels:
+        severity: warning
+        team: opengnosis
+      annotations:
+        summary: "High notification failure rate"
+        description: "Notification failure rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+    
+    - alert: KafkaConsumerLag
+      expr: kafka_consumer_lag{namespace="opengnosis"} > 1000
+      for: 10m
+      labels:
+        severity: warning
+        team: opengnosis
+      annotations:
+        summary: "High Kafka consumer lag in {{ $labels.app }}"
+        description: "Consumer {{ $labels.app }} has lag of {{ $value }} messages on topic {{ $labels.topic }}"
+        runbook_url: "https://docs.opengnosis.io/runbooks/kafka-lag"
+    
+    - alert: SlowScheduleOptimization
+      expr: |
+        histogram_quantile(0.95,
+          sum(rate(schedule_optimization_duration_seconds_bucket{namespace="opengnosis"}[5m])) by (le)
+        ) > 30
+      for: 5m
+      labels:
+        severity: warning
+        team: opengnosis
+      annotations:
+        summary: "Schedule optimization taking too long"
+        description: "Schedule optimization p95 duration is {{ $value }}s (threshold: 30s)"

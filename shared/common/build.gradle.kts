@@ -40,12 +40,16 @@ dependencies {
     
     // Logging
     implementation("org.slf4j:slf4j-api:2.0.9")
+    implementation("net.logstash.logback:logstash-logback-encoder:7.4")
     
     // Distributed Tracing
     implementation("io.micrometer:micrometer-tracing:1.2.0")
     implementation("io.micrometer:micrometer-tracing-bridge-brave:1.2.0")
     implementation("io.zipkin.reporter2:zipkin-reporter-brave:3.0.0")
     implementation("io.zipkin.reporter2:zipkin-sender-urlconnection:3.0.0")
+    
+    // Reactor (for reactive logging filter)
+    implementation("io.projectreactor:reactor-core:3.6.0")
     
     // Testing
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.1")

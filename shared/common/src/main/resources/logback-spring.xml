@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    
+    <springProperty scope="context" name="springAppName" source="spring.application.name"/>
+    
+    <!-- Console appender with JSON format for production -->
+    <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"app":"${springAppName}"}</customFields>
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <version>[ignore]</version>
+                <levelValue>[ignore]</levelValue>
+            </fieldNames>
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>spanId</includeMdcKeyName>
+            <includeMdcKeyName>userId</includeMdcKeyName>
+            <includeMdcKeyName>requestId</includeMdcKeyName>
+        </encoder>
+    </appender>
+    
+    <!-- Console appender with human-readable format for development -->
+    <appender name="CONSOLE_PLAIN" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%X{traceId:-},%X{spanId:-}] [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    
+    <!-- Async appender for better performance -->
+    <appender name="ASYNC_CONSOLE" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <appender-ref ref="CONSOLE_JSON"/>
+    </appender>
+    
+    <!-- Profile-specific configuration -->
+    <springProfile name="dev,local">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE_PLAIN"/>
+        </root>
+        <logger name="com.opengnosis" level="DEBUG"/>
+    </springProfile>
+    
+    <springProfile name="prod,staging">
+        <root level="INFO">
+            <appender-ref ref="ASYNC_CONSOLE"/>
+        </root>
+        <logger name="com.opengnosis" level="INFO"/>
+    </springProfile>
+    
+    <!-- Reduce noise from Spring and other frameworks -->
+    <logger name="org.springframework" level="WARN"/>
+    <logger name="org.hibernate" level="WARN"/>
+    <logger name="org.apache.kafka" level="WARN"/>
+    <logger name="io.lettuce" level="WARN"/>
+    <logger name="org.elasticsearch" level="WARN"/>
+    
+    <!-- Default configuration if no profile is active -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE_JSON"/>
+    </root>
+</configuration>

@@ -1,0 +1,133 @@
+---
+# ServiceMonitor for gnosis-api-gateway
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gnosis-api-gateway
+  namespace: opengnosis
+  labels:
+    team: opengnosis
+    app: gnosis-api-gateway
+spec:
+  selector:
+    matchLabels:
+      app: gnosis-api-gateway
+  endpoints:
+  - port: http
+    path: /actuator/prometheus
+    interval: 30s
+    scrapeTimeout: 10s
+---
+# ServiceMonitor for gnosis-iam
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gnosis-iam
+  namespace: opengnosis
+  labels:
+    team: opengnosis
+    app: gnosis-iam
+spec:
+  selector:
+    matchLabels:
+      app: gnosis-iam
+  endpoints:
+  - port: http
+    path: /actuator/prometheus
+    interval: 30s
+    scrapeTimeout: 10s
+---
+# ServiceMonitor for gnosis-structure
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gnosis-structure
+  namespace: opengnosis
+  labels:
+    team: opengnosis
+    app: gnosis-structure
+spec:
+  selector:
+    matchLabels:
+      app: gnosis-structure
+  endpoints:
+  - port: http
+    path: /actuator/prometheus
+    interval: 30s
+    scrapeTimeout: 10s
+---
+# ServiceMonitor for gnosis-scheduler
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gnosis-scheduler
+  namespace: opengnosis
+  labels:
+    team: opengnosis
+    app: gnosis-scheduler
+spec:
+  selector:
+    matchLabels:
+      app: gnosis-scheduler
+  endpoints:
+  - port: http
+    path: /actuator/prometheus
+    interval: 30s
+    scrapeTimeout: 10s
+---
+# ServiceMonitor for gnosis-journal-command
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gnosis-journal-command
+  namespace: opengnosis
+  labels:
+    team: opengnosis
+    app: gnosis-journal-command
+spec:
+  selector:
+    matchLabels:
+      app: gnosis-journal-command
+  endpoints:
+  - port: http
+    path: /actuator/prometheus
+    interval: 30s
+    scrapeTimeout: 10s
+---
+# ServiceMonitor for gnosis-analytics-query
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gnosis-analytics-query
+  namespace: opengnosis
+  labels:
+    team: opengnosis
+    app: gnosis-analytics-query
+spec:
+  selector:
+    matchLabels:
+      app: gnosis-analytics-query
+  endpoints:
+  - port: http
+    path: /actuator/prometheus
+    interval: 30s
+    scrapeTimeout: 10s
+---
+# ServiceMonitor for gnosis-notifier
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gnosis-notifier
+  namespace: opengnosis
+  labels:
+    team: opengnosis
+    app: gnosis-notifier
+spec:
+  selector:
+    matchLabels:
+      app: gnosis-notifier
+  endpoints:
+  - port: http
+    path: /actuator/prometheus
+    interval: 30s
+    scrapeTimeout: 10s
