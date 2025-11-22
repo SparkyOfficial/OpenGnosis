@@ -1,0 +1,43 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: opengnosis
+
+resources:
+  - ../namespace.yaml
+  - ../configmap.yaml
+  - ../secrets.yaml
+  - ../gnosis-iam.yaml
+  - ../gnosis-api-gateway.yaml
+  - ../gnosis-structure.yaml
+  - ../gnosis-scheduler.yaml
+  - ../gnosis-journal-command.yaml
+  - ../gnosis-analytics-query.yaml
+  - ../gnosis-notifier.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: opengnosis
+  app.kubernetes.io/managed-by: kustomize
+
+images:
+  - name: opengnosis/gnosis-iam
+    newName: opengnosis/gnosis-iam
+    newTag: latest
+  - name: opengnosis/gnosis-api-gateway
+    newName: opengnosis/gnosis-api-gateway
+    newTag: latest
+  - name: opengnosis/gnosis-structure
+    newName: opengnosis/gnosis-structure
+    newTag: latest
+  - name: opengnosis/gnosis-scheduler
+    newName: opengnosis/gnosis-scheduler
+    newTag: latest
+  - name: opengnosis/gnosis-journal-command
+    newName: opengnosis/gnosis-journal-command
+    newTag: latest
+  - name: opengnosis/gnosis-analytics-query
+    newName: opengnosis/gnosis-analytics-query
+    newTag: latest
+  - name: opengnosis/gnosis-notifier
+    newName: opengnosis/gnosis-notifier
+    newTag: latest

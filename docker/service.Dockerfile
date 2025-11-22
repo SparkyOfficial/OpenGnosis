@@ -1,6 +1,6 @@
 # Multi-stage build for OpenGnosis services
 # Build stage
-FROM gradle:8.5-jdk17 AS builder
+FROM gradle:8.5-jdk21 AS builder
 
 WORKDIR /build
 
@@ -16,7 +16,7 @@ COPY services/${SERVICE_NAME}/ ./services/${SERVICE_NAME}/
 RUN gradle :services:${SERVICE_NAME}:bootJar --no-daemon
 
 # Runtime stage
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
 
 # Install required packages
 RUN apk add --no-cache curl bash

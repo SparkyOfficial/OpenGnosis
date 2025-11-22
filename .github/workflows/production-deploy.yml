@@ -1,0 +1,412 @@
+name: Production Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag to deploy (e.g., v1.0.0)'
+        required: true
+        type: string
+      deployment_strategy:
+        description: 'Deployment strategy'
+        required: true
+        type: choice
+        options:
+          - blue-green
+          - canary
+        default: canary
+
+env:
+  KUBECTL_VERSION: v1.28.0
+  KUSTOMIZE_VERSION: v5.3.0
+
+jobs:
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.version }}
+
+      - name: Validate version tag
+        id: validate
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid version format. Expected format: v1.0.0"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Verify Docker images exist
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          SERVICES=(gnosis-iam gnosis-api-gateway gnosis-structure gnosis-scheduler gnosis-journal-command gnosis-analytics-query gnosis-notifier)
+          
+          for SERVICE in "${SERVICES[@]}"; do
+            echo "Checking if image exists: opengnosis/$SERVICE:$VERSION"
+            # Add actual image verification logic here
+            # docker manifest inspect opengnosis/$SERVICE:$VERSION || exit 1
+          done
+
+      - name: Run pre-deployment checks
+        run: |
+          echo "Running pre-deployment validation checks..."
+          # Add any pre-deployment validation scripts here
+          # - Database migration checks
+          # - Configuration validation
+          # - Dependency checks
+
+  approval:
+    name: Manual Approval Required
+    runs-on: ubuntu-latest
+    needs: validate
+    environment:
+      name: production-approval
+    
+    steps:
+      - name: Request approval
+        run: |
+          echo "Deployment to production requires manual approval"
+          echo "Version: ${{ needs.validate.outputs.version }}"
+          echo "Strategy: ${{ github.event.inputs.deployment_strategy }}"
+
+  deploy-blue-green:
+    name: Blue-Green Deployment
+    runs-on: ubuntu-latest
+    needs: [validate, approval]
+    if: github.event.inputs.deployment_strategy == 'blue-green'
+    environment:
+      name: production
+      url: https://opengnosis.example.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.version }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: ${{ env.KUSTOMIZE_VERSION }}
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG_PROD }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Determine active environment
+        id: active
+        run: |
+          # Check which environment is currently active (blue or green)
+          ACTIVE=$(kubectl get service prod-gnosis-api-gateway -n opengnosis-prod -o jsonpath='{.spec.selector.slot}' || echo "blue")
+          if [ "$ACTIVE" == "blue" ]; then
+            echo "active=blue" >> $GITHUB_OUTPUT
+            echo "target=green" >> $GITHUB_OUTPUT
+          else
+            echo "active=green" >> $GITHUB_OUTPUT
+            echo "target=blue" >> $GITHUB_OUTPUT
+          fi
+          echo "Current active: $ACTIVE"
+
+      - name: Deploy to target environment
+        run: |
+          TARGET="${{ steps.active.outputs.target }}"
+          VERSION="${{ needs.validate.outputs.version }}"
+          
+          echo "Deploying version $VERSION to $TARGET environment"
+          
+          # Update kustomization with target slot label
+          cd k8s/overlays/production
+          kustomize edit add label slot:$TARGET
+          
+          # Update image tags
+          kustomize edit set image \
+            opengnosis/gnosis-iam=opengnosis/gnosis-iam:$VERSION \
+            opengnosis/gnosis-api-gateway=opengnosis/gnosis-api-gateway:$VERSION \
+            opengnosis/gnosis-structure=opengnosis/gnosis-structure:$VERSION \
+            opengnosis/gnosis-scheduler=opengnosis/gnosis-scheduler:$VERSION \
+            opengnosis/gnosis-journal-command=opengnosis/gnosis-journal-command:$VERSION \
+            opengnosis/gnosis-analytics-query=opengnosis/gnosis-analytics-query:$VERSION \
+            opengnosis/gnosis-notifier=opengnosis/gnosis-notifier:$VERSION
+          
+          # Deploy to target
+          kustomize build . | kubectl apply -f -
+
+      - name: Wait for target environment
+        run: |
+          TARGET="${{ steps.active.outputs.target }}"
+          echo "Waiting for $TARGET environment to be ready..."
+          
+          kubectl rollout status deployment/prod-gnosis-iam -n opengnosis-prod --timeout=10m
+          kubectl rollout status deployment/prod-gnosis-api-gateway -n opengnosis-prod --timeout=10m
+          kubectl rollout status deployment/prod-gnosis-structure -n opengnosis-prod --timeout=10m
+          kubectl rollout status deployment/prod-gnosis-scheduler -n opengnosis-prod --timeout=10m
+          kubectl rollout status deployment/prod-gnosis-journal-command -n opengnosis-prod --timeout=10m
+          kubectl rollout status deployment/prod-gnosis-analytics-query -n opengnosis-prod --timeout=10m
+          kubectl rollout status deployment/prod-gnosis-notifier -n opengnosis-prod --timeout=10m
+
+      - name: Run smoke tests on target
+        run: |
+          TARGET="${{ steps.active.outputs.target }}"
+          echo "Running smoke tests on $TARGET environment..."
+          
+          # Run smoke tests against target environment
+          sleep 30
+          kubectl run smoke-test --image=curlimages/curl:latest --rm -i --restart=Never -n opengnosis-prod -- \
+            curl -f http://prod-gnosis-api-gateway:8080/actuator/health || exit 1
+
+      - name: Switch traffic to target
+        run: |
+          TARGET="${{ steps.active.outputs.target }}"
+          echo "Switching traffic to $TARGET environment..."
+          
+          # Update service selectors to point to target
+          kubectl patch service prod-gnosis-api-gateway -n opengnosis-prod -p '{"spec":{"selector":{"slot":"'$TARGET'"}}}'
+          
+          echo "Traffic switched to $TARGET"
+
+      - name: Monitor for errors
+        run: |
+          echo "Monitoring for errors for 5 minutes..."
+          sleep 300
+          
+          # Check error rate
+          ERROR_RATE=$(kubectl logs -n opengnosis-prod -l app=gnosis-api-gateway --tail=1000 | grep -c "ERROR" || echo 0)
+          if [ $ERROR_RATE -gt 50 ]; then
+            echo "::error::High error rate detected: $ERROR_RATE errors"
+            exit 1
+          fi
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          ACTIVE="${{ steps.active.outputs.active }}"
+          echo "Rolling back to $ACTIVE environment..."
+          
+          kubectl patch service prod-gnosis-api-gateway -n opengnosis-prod -p '{"spec":{"selector":{"slot":"'$ACTIVE'"}}}'
+          
+          echo "Rollback completed"
+
+  deploy-canary:
+    name: Canary Deployment
+    runs-on: ubuntu-latest
+    needs: [validate, approval]
+    if: github.event.inputs.deployment_strategy == 'canary'
+    environment:
+      name: production
+      url: https://opengnosis.example.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.version }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: ${{ env.KUSTOMIZE_VERSION }}
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG_PROD }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Deploy canary (10% traffic)
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          echo "Deploying canary with 10% traffic for version $VERSION"
+          
+          # Create canary deployment
+          cd k8s/overlays/production
+          kustomize edit add label version:canary
+          kustomize edit set image \
+            opengnosis/gnosis-iam=opengnosis/gnosis-iam:$VERSION \
+            opengnosis/gnosis-api-gateway=opengnosis/gnosis-api-gateway:$VERSION \
+            opengnosis/gnosis-structure=opengnosis/gnosis-structure:$VERSION \
+            opengnosis/gnosis-scheduler=opengnosis/gnosis-scheduler:$VERSION \
+            opengnosis/gnosis-journal-command=opengnosis/gnosis-journal-command:$VERSION \
+            opengnosis/gnosis-analytics-query=opengnosis/gnosis-analytics-query:$VERSION \
+            opengnosis/gnosis-notifier=opengnosis/gnosis-notifier:$VERSION
+          
+          # Apply Istio VirtualService for 10% traffic split
+          kubectl apply -f - <<EOF
+          apiVersion: networking.istio.io/v1beta1
+          kind: VirtualService
+          metadata:
+            name: gnosis-api-gateway-canary
+            namespace: opengnosis-prod
+          spec:
+            hosts:
+            - gnosis-api-gateway
+            http:
+            - match:
+              - headers:
+                  canary:
+                    exact: "true"
+              route:
+              - destination:
+                  host: gnosis-api-gateway
+                  subset: canary
+            - route:
+              - destination:
+                  host: gnosis-api-gateway
+                  subset: stable
+                weight: 90
+              - destination:
+                  host: gnosis-api-gateway
+                  subset: canary
+                weight: 10
+          EOF
+
+      - name: Monitor canary (10%)
+        run: |
+          echo "Monitoring canary deployment for 10 minutes..."
+          sleep 600
+          
+          # Check metrics
+          ERROR_RATE=$(kubectl logs -n opengnosis-prod -l version=canary --tail=1000 | grep -c "ERROR" || echo 0)
+          if [ $ERROR_RATE -gt 10 ]; then
+            echo "::error::High error rate in canary: $ERROR_RATE errors"
+            exit 1
+          fi
+
+      - name: Increase to 50% traffic
+        run: |
+          echo "Increasing canary traffic to 50%..."
+          
+          kubectl apply -f - <<EOF
+          apiVersion: networking.istio.io/v1beta1
+          kind: VirtualService
+          metadata:
+            name: gnosis-api-gateway-canary
+            namespace: opengnosis-prod
+          spec:
+            hosts:
+            - gnosis-api-gateway
+            http:
+            - route:
+              - destination:
+                  host: gnosis-api-gateway
+                  subset: stable
+                weight: 50
+              - destination:
+                  host: gnosis-api-gateway
+                  subset: canary
+                weight: 50
+          EOF
+
+      - name: Monitor canary (50%)
+        run: |
+          echo "Monitoring canary deployment at 50% for 10 minutes..."
+          sleep 600
+          
+          ERROR_RATE=$(kubectl logs -n opengnosis-prod -l version=canary --tail=1000 | grep -c "ERROR" || echo 0)
+          if [ $ERROR_RATE -gt 25 ]; then
+            echo "::error::High error rate in canary: $ERROR_RATE errors"
+            exit 1
+          fi
+
+      - name: Complete rollout (100% traffic)
+        run: |
+          echo "Completing rollout to 100%..."
+          
+          kubectl apply -f - <<EOF
+          apiVersion: networking.istio.io/v1beta1
+          kind: VirtualService
+          metadata:
+            name: gnosis-api-gateway-canary
+            namespace: opengnosis-prod
+          spec:
+            hosts:
+            - gnosis-api-gateway
+            http:
+            - route:
+              - destination:
+                  host: gnosis-api-gateway
+                  subset: canary
+                weight: 100
+          EOF
+          
+          # Update stable deployment to new version
+          cd k8s/overlays/production
+          kustomize edit add label version:stable
+          kustomize build . | kubectl apply -f -
+
+      - name: Cleanup canary resources
+        run: |
+          echo "Cleaning up canary resources..."
+          kubectl delete virtualservice gnosis-api-gateway-canary -n opengnosis-prod
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Rolling back canary deployment..."
+          
+          # Route all traffic back to stable
+          kubectl apply -f - <<EOF
+          apiVersion: networking.istio.io/v1beta1
+          kind: VirtualService
+          metadata:
+            name: gnosis-api-gateway-canary
+            namespace: opengnosis-prod
+          spec:
+            hosts:
+            - gnosis-api-gateway
+            http:
+            - route:
+              - destination:
+                  host: gnosis-api-gateway
+                  subset: stable
+                weight: 100
+          EOF
+          
+          # Delete canary deployment
+          kubectl delete deployment -l version=canary -n opengnosis-prod
+          
+          echo "Rollback completed"
+
+  post-deployment:
+    name: Post-Deployment Tasks
+    runs-on: ubuntu-latest
+    needs: [deploy-blue-green, deploy-canary]
+    if: always() && (needs.deploy-blue-green.result == 'success' || needs.deploy-canary.result == 'success')
+    
+    steps:
+      - name: Create deployment record
+        run: |
+          echo "Creating deployment record..."
+          echo "Version: ${{ needs.validate.outputs.version }}"
+          echo "Strategy: ${{ github.event.inputs.deployment_strategy }}"
+          echo "Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          echo "Deployed by: ${{ github.actor }}"
+
+      - name: Notify team
+        run: |
+          echo "Notifying team of successful deployment..."
+          # Add notification logic here (Slack, email, etc.)
+
+      - name: Update documentation
+        run: |
+          echo "Updating deployment documentation..."
+          # Add documentation update logic here

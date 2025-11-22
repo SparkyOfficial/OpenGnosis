@@ -1,0 +1,139 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gnosis-iam
+spec:
+  template:
+    spec:
+      containers:
+      - name: gnosis-iam
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "dev"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gnosis-api-gateway
+spec:
+  template:
+    spec:
+      containers:
+      - name: gnosis-api-gateway
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "dev"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gnosis-structure
+spec:
+  template:
+    spec:
+      containers:
+      - name: gnosis-structure
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "dev"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gnosis-scheduler
+spec:
+  template:
+    spec:
+      containers:
+      - name: gnosis-scheduler
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "dev"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gnosis-journal-command
+spec:
+  template:
+    spec:
+      containers:
+      - name: gnosis-journal-command
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "dev"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gnosis-analytics-query
+spec:
+  template:
+    spec:
+      containers:
+      - name: gnosis-analytics-query
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "dev"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gnosis-notifier
+spec:
+  template:
+    spec:
+      containers:
+      - name: gnosis-notifier
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "dev"

@@ -1,0 +1,48 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: opengnosis-dev
+
+namePrefix: dev-
+
+commonLabels:
+  environment: dev
+
+bases:
+  - ../../base
+
+patchesStrategicMerge:
+  - deployment-patch.yaml
+  - configmap-patch.yaml
+
+images:
+  - name: opengnosis/gnosis-iam
+    newTag: dev-latest
+  - name: opengnosis/gnosis-api-gateway
+    newTag: dev-latest
+  - name: opengnosis/gnosis-structure
+    newTag: dev-latest
+  - name: opengnosis/gnosis-scheduler
+    newTag: dev-latest
+  - name: opengnosis/gnosis-journal-command
+    newTag: dev-latest
+  - name: opengnosis/gnosis-analytics-query
+    newTag: dev-latest
+  - name: opengnosis/gnosis-notifier
+    newTag: dev-latest
+
+replicas:
+  - name: gnosis-iam
+    count: 1
+  - name: gnosis-api-gateway
+    count: 1
+  - name: gnosis-structure
+    count: 1
+  - name: gnosis-scheduler
+    count: 1
+  - name: gnosis-journal-command
+    count: 1
+  - name: gnosis-analytics-query
+    count: 1
+  - name: gnosis-notifier
+    count: 1

@@ -1,0 +1,175 @@
+name: Deploy to Kubernetes
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+
+env:
+  KUBECTL_VERSION: v1.28.0
+  KUSTOMIZE_VERSION: v5.3.0
+
+jobs:
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: development
+      url: https://dev.opengnosis.example.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: ${{ env.KUSTOMIZE_VERSION }}
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG_DEV }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Update image tags
+        working-directory: k8s/overlays/dev
+        run: |
+          kustomize edit set image \
+            opengnosis/gnosis-iam=opengnosis/gnosis-iam:main-${{ github.sha }} \
+            opengnosis/gnosis-api-gateway=opengnosis/gnosis-api-gateway:main-${{ github.sha }} \
+            opengnosis/gnosis-structure=opengnosis/gnosis-structure:main-${{ github.sha }} \
+            opengnosis/gnosis-scheduler=opengnosis/gnosis-scheduler:main-${{ github.sha }} \
+            opengnosis/gnosis-journal-command=opengnosis/gnosis-journal-command:main-${{ github.sha }} \
+            opengnosis/gnosis-analytics-query=opengnosis/gnosis-analytics-query:main-${{ github.sha }} \
+            opengnosis/gnosis-notifier=opengnosis/gnosis-notifier:main-${{ github.sha }}
+
+      - name: Deploy to dev
+        working-directory: k8s/overlays/dev
+        run: |
+          kustomize build . | kubectl apply -f -
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/dev-gnosis-iam -n opengnosis-dev --timeout=5m
+          kubectl rollout status deployment/dev-gnosis-api-gateway -n opengnosis-dev --timeout=5m
+          kubectl rollout status deployment/dev-gnosis-structure -n opengnosis-dev --timeout=5m
+          kubectl rollout status deployment/dev-gnosis-scheduler -n opengnosis-dev --timeout=5m
+          kubectl rollout status deployment/dev-gnosis-journal-command -n opengnosis-dev --timeout=5m
+          kubectl rollout status deployment/dev-gnosis-analytics-query -n opengnosis-dev --timeout=5m
+          kubectl rollout status deployment/dev-gnosis-notifier -n opengnosis-dev --timeout=5m
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n opengnosis-dev
+          kubectl get services -n opengnosis-dev
+
+      - name: Run smoke tests
+        run: |
+          # Wait for services to be ready
+          sleep 30
+          
+          # Test API Gateway health
+          kubectl run curl-test --image=curlimages/curl:latest --rm -i --restart=Never -n opengnosis-dev -- \
+            curl -f http://dev-gnosis-api-gateway:8080/actuator/health || exit 1
+
+      - name: Notify deployment
+        if: always()
+        run: |
+          echo "Deployment to dev completed with status: ${{ job.status }}"
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: staging
+      url: https://staging.opengnosis.example.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: ${{ env.KUSTOMIZE_VERSION }}
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Update image tags
+        working-directory: k8s/overlays/staging
+        run: |
+          kustomize edit set image \
+            opengnosis/gnosis-iam=opengnosis/gnosis-iam:${{ steps.version.outputs.VERSION }} \
+            opengnosis/gnosis-api-gateway=opengnosis/gnosis-api-gateway:${{ steps.version.outputs.VERSION }} \
+            opengnosis/gnosis-structure=opengnosis/gnosis-structure:${{ steps.version.outputs.VERSION }} \
+            opengnosis/gnosis-scheduler=opengnosis/gnosis-scheduler:${{ steps.version.outputs.VERSION }} \
+            opengnosis/gnosis-journal-command=opengnosis/gnosis-journal-command:${{ steps.version.outputs.VERSION }} \
+            opengnosis/gnosis-analytics-query=opengnosis/gnosis-analytics-query:${{ steps.version.outputs.VERSION }} \
+            opengnosis/gnosis-notifier=opengnosis/gnosis-notifier:${{ steps.version.outputs.VERSION }}
+
+      - name: Deploy to staging
+        working-directory: k8s/overlays/staging
+        run: |
+          kustomize build . | kubectl apply -f -
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/staging-gnosis-iam -n opengnosis-staging --timeout=10m
+          kubectl rollout status deployment/staging-gnosis-api-gateway -n opengnosis-staging --timeout=10m
+          kubectl rollout status deployment/staging-gnosis-structure -n opengnosis-staging --timeout=10m
+          kubectl rollout status deployment/staging-gnosis-scheduler -n opengnosis-staging --timeout=10m
+          kubectl rollout status deployment/staging-gnosis-journal-command -n opengnosis-staging --timeout=10m
+          kubectl rollout status deployment/staging-gnosis-analytics-query -n opengnosis-staging --timeout=10m
+          kubectl rollout status deployment/staging-gnosis-notifier -n opengnosis-staging --timeout=10m
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n opengnosis-staging
+          kubectl get services -n opengnosis-staging
+
+      - name: Run integration tests
+        run: |
+          # Wait for services to be ready
+          sleep 60
+          
+          # Run integration test suite against staging
+          echo "Running integration tests against staging environment"
+          # Add your integration test commands here
+
+      - name: Notify deployment
+        if: always()
+        run: |
+          echo "Deployment to staging completed with status: ${{ job.status }}"

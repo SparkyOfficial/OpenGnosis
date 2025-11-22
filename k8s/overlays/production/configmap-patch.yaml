@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opengnosis-config
+data:
+  SPRING_PROFILES_ACTIVE: "production"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka.opengnosis-prod.svc.cluster.local:9092"
+  POSTGRES_HOST: "postgres.opengnosis-prod.svc.cluster.local"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "opengnosis_prod"
+  REDIS_HOST: "redis.opengnosis-prod.svc.cluster.local"
+  REDIS_PORT: "6379"
+  ELASTICSEARCH_URIS: "http://elasticsearch.opengnosis-prod.svc.cluster.local:9200"
