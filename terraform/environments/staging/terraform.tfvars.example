@@ -1,0 +1,8 @@
+# Example terraform.tfvars for staging environment
+# Copy this file to terraform.tfvars and fill in your values
+
+region      = "us-east-1"
+db_password = "your-secure-password-here"
+
+# Note: Never commit terraform.tfvars to version control
+# Add it to .gitignore to prevent accidental commits
